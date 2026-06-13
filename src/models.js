@@ -86,7 +86,8 @@ module.exports = {
   nvidia: [
     { group: 'NVIDIA Nemotron',
       models: [
-        { id: 'nvidia/nemotron-3-ultra-550b-a55b',                    label: 'Nemotron 3 Ultra 550B (hybrid Mamba-MoE, 1M ctx)' },
+        { id: 'nvidia/nemotron-3-ultra-550b-a55b',                    label: 'Nemotron 3 Ultra 550B (reasoning, 1M ctx)' },
+        { id: 'nvidia/nemotron-3-super-120b-a12b',                    label: 'Nemotron 3 Super 120B-A12B (reasoning)' },
         { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',        label: 'Nemotron 3 Nano Omni 30B (multimodal reasoning)' },
         { id: 'nvidia/llama-3.3-nemotron-super-49b-v1',               label: 'Llama 3.3 Nemotron Super 49B v1' },
         { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',              label: 'Llama 3.1 Nemotron Ultra 253B v1' },

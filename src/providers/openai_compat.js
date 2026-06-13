@@ -39,6 +39,16 @@ function buildPayload(body, model, cfg, isResponsesApi) {
       payload.tool_choice = { type: 'function', function: { name: body.tool_choice.name } };
     }
   }
+
+  // NVIDIA reasoning models (e.g. Nemotron 3 Super/Ultra) gate reasoning behind
+  // chat_template_kwargs.enable_thinking + reasoning_budget and stream the chain
+  // of thought in delta.reasoning_content. Map Anthropic's thinking request onto
+  // those NVIDIA-specific knobs. (These params are NIM-specific, so gate to nvidia.)
+  if (cfg?.kind === 'nvidia' && body.thinking && body.thinking.type === 'enabled') {
+    payload.chat_template_kwargs = { enable_thinking: true };
+    if (body.thinking.budget_tokens != null) payload.reasoning_budget = body.thinking.budget_tokens;
+  }
+
   for (const k of Object.keys(payload)) if (payload[k] === undefined) delete payload[k];
   return payload;
 }
@@ -170,11 +180,12 @@ async function callOpenAICompatible(providerCfg, body, res) {
   }
 
   const json = await upstream.json();
-  const { text, toolCalls, stopReason } = parseResponse(json, isResponsesApi);
+  const { text, thinking, toolCalls, stopReason } = parseResponse(json, isResponsesApi);
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(buildAnthropicResponse({
     model: cfg.model,
     text,
+    thinking,
     toolCalls,
     stopReason,
     usage: json.usage
@@ -190,6 +201,9 @@ async function streamChatCompletions(upstream, emitter) {
       continue;
     }
     const delta = choice.delta || {};
+    // Reasoning models (NVIDIA Nemotron, DeepSeek R1, etc.) stream the chain of
+    // thought separately in reasoning_content -> surface as Anthropic thinking.
+    if (delta.reasoning_content) emitter.deltaThinking(delta.reasoning_content);
     if (delta.content) emitter.deltaText(delta.content);
     if (delta.tool_calls) {
       for (const tc of delta.tool_calls) emitter.deltaToolCall(tc.index ?? 0, tc);
@@ -253,6 +267,7 @@ function parseResponse(json, isResponsesApi) {
     const msg = choice?.message || {};
     return {
       text: msg.content || '',
+      thinking: msg.reasoning_content || '',
       toolCalls: (msg.tool_calls || []).map(tc => ({
         id: tc.id, name: tc.function?.name, arguments: tc.function?.arguments
       })),

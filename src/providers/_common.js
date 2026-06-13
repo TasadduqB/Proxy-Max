@@ -82,6 +82,8 @@ function createAnthropicSSEEmitter(res, model) {
   let started = false;
   let textBlockOpen = false;
   let textIndex = 0;
+  let thinkingBlockOpen = false;
+  let thinkingIndex = 0;
   // Tool blocks keyed by upstream tool_call index -> our content block index.
   const toolBlocks = new Map();
   let nextBlockIndex = 0;
@@ -114,8 +116,44 @@ function createAnthropicSSEEmitter(res, model) {
     send('ping', { type: 'ping' });
   }
 
+  // Reasoning models emit a chain of thought before the answer; represent it as
+  // an Anthropic thinking block, which must precede the text/tool blocks.
+  function ensureThinkingBlock() {
+    if (thinkingBlockOpen) return;
+    thinkingIndex = nextBlockIndex++;
+    thinkingBlockOpen = true;
+    send('content_block_start', {
+      type: 'content_block_start',
+      index: thinkingIndex,
+      content_block: { type: 'thinking', thinking: '' }
+    });
+  }
+
+  function closeThinkingBlock() {
+    if (!thinkingBlockOpen) return;
+    send('content_block_delta', {
+      type: 'content_block_delta',
+      index: thinkingIndex,
+      delta: { type: 'signature_delta', signature: Buffer.from('proxy-max').toString('base64') }
+    });
+    send('content_block_stop', { type: 'content_block_stop', index: thinkingIndex });
+    thinkingBlockOpen = false;
+  }
+
+  function deltaThinking(text) {
+    if (!text) return;
+    start();
+    ensureThinkingBlock();
+    send('content_block_delta', {
+      type: 'content_block_delta',
+      index: thinkingIndex,
+      delta: { type: 'thinking_delta', thinking: text }
+    });
+  }
+
   function ensureTextBlock() {
     if (textBlockOpen) return;
+    closeThinkingBlock();
     textIndex = nextBlockIndex++;
     textBlockOpen = true;
     send('content_block_start', {
@@ -140,7 +178,8 @@ function createAnthropicSSEEmitter(res, model) {
     start();
     let block = toolBlocks.get(idx);
     if (!block) {
-      // Close text block first if open, to keep ordering tidy.
+      // Close thinking + text blocks first if open, to keep ordering tidy.
+      closeThinkingBlock();
       if (textBlockOpen) {
         send('content_block_stop', { type: 'content_block_stop', index: textIndex });
         textBlockOpen = false;
@@ -194,6 +233,7 @@ function createAnthropicSSEEmitter(res, model) {
 
   function end() {
     start();
+    closeThinkingBlock();
     if (textBlockOpen) {
       send('content_block_stop', { type: 'content_block_stop', index: textIndex });
       textBlockOpen = false;
@@ -223,12 +263,13 @@ function createAnthropicSSEEmitter(res, model) {
     end();
   }
 
-  return { send, start, deltaText, deltaToolCall, setStopReason, setUsage, end, fail };
+  return { send, start, deltaText, deltaThinking, deltaToolCall, setStopReason, setUsage, end, fail };
 }
 
 // Build a non-stream Anthropic Messages response from accumulated parts.
-function buildAnthropicResponse({ model, text, toolCalls, stopReason, usage }) {
+function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, usage }) {
   const content = [];
+  if (thinking) content.push({ type: 'thinking', thinking, signature: Buffer.from('proxy-max').toString('base64') });
   if (text) content.push({ type: 'text', text });
   for (const tc of toolCalls || []) {
     let input = {};
