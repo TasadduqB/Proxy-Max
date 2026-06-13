@@ -10,8 +10,10 @@ const {
   iterSSE
 } = require('./_common');
 
-function buildPayload(body, model, cfg) {
+function buildPayload(body, model, cfg, isResponsesApi) {
   const isAzure = cfg?.kind === 'azure';
+  if (isResponsesApi) return buildResponsesPayload(body, model);
+
   const payload = {
     model,
     messages: anthropicToOpenAIMessages(body),
@@ -21,8 +23,8 @@ function buildPayload(body, model, cfg) {
     stop: body.stop_sequences
   };
 
-  // Azure newer models (and the /openai/responses endpoint) require
-  // max_completion_tokens; legacy AOAI / non-Azure use max_tokens.
+  // Azure newer models (chat/completions) require max_completion_tokens;
+  // legacy AOAI / non-Azure use max_tokens.
   if (body.max_tokens != null) {
     if (isAzure) payload.max_completion_tokens = body.max_tokens;
     else payload.max_tokens = body.max_tokens;
@@ -41,11 +43,85 @@ function buildPayload(body, model, cfg) {
   return payload;
 }
 
+// Azure /openai/responses uses a different request shape than chat/completions:
+//   - `input` (list of items) instead of `messages`
+//   - system prompt goes in `instructions`
+//   - `max_output_tokens` instead of max_tokens
+//   - tools are flat ({type, name, description, parameters}), not nested under `function`
+//   - tool calls / results are top-level items, not message fields
+function buildResponsesPayload(body, model) {
+  const { instructions, input } = buildResponsesInput(body);
+  const payload = {
+    model,
+    input,
+    stream: !!body.stream,
+    temperature: body.temperature,
+    top_p: body.top_p
+  };
+  if (instructions) payload.instructions = instructions;
+  if (body.max_tokens != null) payload.max_output_tokens = body.max_tokens;
+
+  if (body.tools) {
+    payload.tools = body.tools.map(t => ({
+      type: 'function',
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema || { type: 'object', properties: {} }
+    }));
+  }
+  if (body.tool_choice) {
+    if (body.tool_choice.type === 'auto') payload.tool_choice = 'auto';
+    else if (body.tool_choice.type === 'any') payload.tool_choice = 'required';
+    else if (body.tool_choice.type === 'tool') {
+      payload.tool_choice = { type: 'function', name: body.tool_choice.name };
+    }
+  }
+  for (const k of Object.keys(payload)) if (payload[k] === undefined) delete payload[k];
+  return payload;
+}
+
+// Convert an Anthropic Messages body into Responses-API { instructions, input }.
+function buildResponsesInput(body) {
+  let instructions = '';
+  if (body.system) {
+    instructions = typeof body.system === 'string'
+      ? body.system
+      : body.system.map(b => b.text || '').join('\n');
+  }
+  const input = [];
+  for (const m of body.messages || []) {
+    if (typeof m.content === 'string') {
+      input.push({ role: m.role, content: m.content });
+      continue;
+    }
+    const parts = [];
+    for (const block of m.content || []) {
+      if (block.type === 'text') {
+        parts.push({ type: m.role === 'assistant' ? 'output_text' : 'input_text', text: block.text });
+      } else if (block.type === 'tool_use') {
+        input.push({ type: 'function_call', call_id: block.id, name: block.name, arguments: JSON.stringify(block.input || {}) });
+      } else if (block.type === 'tool_result') {
+        const out = typeof block.content === 'string'
+          ? block.content
+          : (block.content || []).map(c => c.text || '').join('\n');
+        input.push({ type: 'function_call_output', call_id: block.tool_use_id, output: out });
+      } else if (block.type === 'image' && block.source) {
+        const url = block.source.type === 'base64'
+          ? `data:${block.source.media_type};base64,${block.source.data}`
+          : block.source.url;
+        parts.push({ type: 'input_image', image_url: url });
+      }
+    }
+    if (parts.length) input.push({ role: m.role, content: parts });
+  }
+  return { instructions, input };
+}
+
 // providerCfg = { kind: 'azure'|'nvidia', endpoint, apiKey, model, apiVersion?, deployment? }
 async function callOpenAICompatible(providerCfg, body, res) {
   const cfg = providerCfg.kind === 'nvidia' ? resolveNvidiaConfig(providerCfg) : providerCfg;
   const { url, headers, isResponsesApi } = buildRequest(cfg);
-  const payload = buildPayload(body, modelForUpstream(cfg), cfg);
+  const payload = buildPayload(body, modelForUpstream(cfg), cfg, isResponsesApi);
 
   const timeoutMs = Number(providerCfg.timeoutMs) > 0 ? Number(providerCfg.timeoutMs) : 60000;
   const controller = new AbortController();
@@ -191,7 +267,9 @@ function parseResponse(json, isResponsesApi) {
       toolCalls: toolItems.map(tc => ({
         id: tc.id, name: tc.name, arguments: tc.arguments
       })),
-      stopReason: json.status === 'completed' ? 'stop' : 'stop'
+      // The Responses API has no per-message finish_reason; infer tool_use from
+      // the presence of function_call items so the CLI knows to run the tool.
+      stopReason: toolItems.length ? 'tool_calls' : 'stop'
     };
   }
 
