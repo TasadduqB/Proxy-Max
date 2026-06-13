@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Proxy-Max</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg:#070910; --bg2:#0c0f17;
+    --panel:#10131c; --panel2:#161a25; --panel3:#1c2230;
+    --line:#222837; --line2:#2c3346;
+    --text:#e8eaf2; --mute:#8993ab; --dim:#5a6378;
+    --accent:#7aa2ff; --accent2:#b988ff; --accent3:#5ee0c1;
+    --ok:#3ddc97; --warn:#ffb547; --err:#ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; padding:0; background:
+    radial-gradient(1100px 700px at 12% -10%, rgba(122,162,255,.10), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%, rgba(185,136,255,.08), transparent 55%),
+    var(--bg);
+    color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    min-height:100vh;
+  }
+  a { color:var(--accent); text-decoration:none; }
+  button { font:inherit; }
+
+  /* Layout */
+  .app { display:grid; grid-template-columns: 240px 1fr; min-height:100vh; }
+  aside {
+    border-right:1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+    padding: 20px 14px;
+    position: sticky; top:0; height:100vh; overflow:auto;
+  }
+  .brand { display:flex; align-items:center; gap:10px; padding:6px 6px 18px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+  .brand .logo {
+    width:34px; height:34px; border-radius:9px;
+    background: conic-gradient(from 220deg at 50% 50%, var(--accent), var(--accent2), var(--accent3), var(--accent));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; color:#0a0c12; box-shadow: 0 8px 20px rgba(122,162,255,.18);
+  }
+  .brand .name { font-weight:700; letter-spacing:.2px; }
+  .brand .ver { color:var(--mute); font-size:11px; }
+
+  nav { display:flex; flex-direction:column; gap:2px; }
+  .navitem {
+    display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:8px;
+    color:var(--mute); cursor:pointer; user-select:none; font-weight:500;
+    border:1px solid transparent;
+  }
+  .navitem:hover { color:var(--text); background:var(--panel2); }
+  .navitem.active { color:var(--text); background:var(--panel2); border-color:var(--line2); }
+  .navitem .ic { width:18px; height:18px; opacity:.85; }
+  .nav-section { color:var(--dim); font-size:11px; letter-spacing:.12em; text-transform:uppercase; padding:14px 10px 6px; }
+
+  .side-foot { position:absolute; bottom:14px; left:14px; right:14px; }
+  .health {
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border:1px solid var(--line); border-radius:10px; background:var(--panel);
+  }
+  .health .dot { width:9px; height:9px; border-radius:50%; background:var(--mute); box-shadow: 0 0 0 4px rgba(255,255,255,0.04); }
+  .health.ok .dot   { background:var(--ok);  box-shadow: 0 0 0 4px rgba(61,220,151,.12); }
+  .health.warn .dot { background:var(--warn); box-shadow: 0 0 0 4px rgba(255,181,71,.12); }
+  .health .info { display:flex; flex-direction:column; line-height:1.2; min-width:0; }
+  .health .label { font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.1em; }
+  .health .value { font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* Main */
+  main { padding: 28px clamp(20px, 4vw, 44px) 80px; max-width: 1180px; }
+  h1 { font-size:22px; margin:0 0 4px; letter-spacing:.2px; }
+  .sub { color:var(--mute); font-size:13px; margin-bottom:18px; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:16px; }
+  .topbar .pills { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px; background:var(--panel); border:1px solid var(--line); color:var(--mute); font-size:12px; }
+  .pill .dot { width:7px; height:7px; border-radius:50%; background:var(--mute); }
+  .pill.ok   { color:var(--text); }   .pill.ok   .dot { background:var(--ok); }
+  .pill.warn { color:var(--text); }   .pill.warn .dot { background:var(--warn); }
+  .pill.err  { color:var(--text); }   .pill.err  .dot { background:var(--err); }
+
+  .card {
+    background:linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0)) , var(--panel);
+    border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:14px;
+  }
+  .card h3 { margin:0 0 10px; font-size:14px; letter-spacing:.2px; display:flex; align-items:center; gap:8px; }
+  .card h3 .badge { font-size:10.5px; padding:2px 7px; border-radius:999px; background:var(--panel3); color:var(--mute); border:1px solid var(--line2); letter-spacing:.06em; text-transform:uppercase; }
+
+  .src-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+  .src {
+    background:var(--panel2); border:1px solid var(--line); border-radius:12px;
+    padding:16px; cursor:pointer; transition:.15s; user-select:none; position:relative; overflow:hidden;
+  }
+  .src::after { content:""; position:absolute; inset:0; pointer-events:none; opacity:0; transition:.15s; background: radial-gradient(380px 120px at 50% -20%, rgba(122,162,255,.18), transparent 60%); }
+  .src:hover { border-color:var(--line2); transform:translateY(-1px); }
+  .src:hover::after { opacity:1; }
+  .src.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset, 0 8px 24px rgba(122,162,255,.10); }
+  .src .name { font-weight:600; display:flex; align-items:center; gap:8px; }
+  .src .name .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); }
+  .src.active .name .dot { background: var(--accent3); box-shadow: 0 0 0 4px rgba(94,224,193,.18); }
+  .src .desc { color:var(--mute); font-size:12px; margin-top:5px; }
+
+  label { display:block; font-size:11.5px; color:var(--mute); margin:12px 0 6px; letter-spacing:.08em; text-transform:uppercase; }
+  input, select, textarea {
+    width:100%; background:var(--panel2); color:var(--text);
+    border:1px solid var(--line); border-radius:9px; padding:10px 12px; font:inherit; outline:none;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  input:focus, select:focus, textarea:focus { border-color:var(--accent); box-shadow: 0 0 0 3px rgba(122,162,255,.14); }
+  select optgroup { color:var(--mute); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+
+  .btn {
+    background:var(--accent); color:#0b0d12; border:0; border-radius:9px;
+    padding:10px 16px; font-weight:600; cursor:pointer;
+  }
+  .btn:hover { filter:brightness(1.05); }
+  .btn.secondary { background:transparent; color:var(--text); border:1px solid var(--line2); }
+  .btn.secondary:hover { background:var(--panel2); }
+  .btn.ghost { background:transparent; color:var(--mute); border:1px dashed var(--line); }
+  .btn.danger { background:transparent; color:var(--err); border:1px solid var(--err); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center; }
+
+  .kv { display:grid; grid-template-columns: 140px 1fr; gap:6px 14px; font-size:13px; align-items:center; }
+  .kv .k { color:var(--mute); font-size:12px; letter-spacing:.04em; }
+  .kv .v { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; word-break: break-all; }
+  .kv .v.ok { color:var(--ok); } .kv .v.bad { color:var(--err); }
+
+  .check {
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+    background:var(--panel2); margin-bottom:8px;
+  }
+  .check .left { display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
+  .check .ic {
+    width:30px; height:30px; border-radius:8px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--panel3); border:1px solid var(--line2); font-weight:700; color:var(--mute);
+  }
+  .check .meta { min-width:0; }
+  .check .title { font-weight:600; }
+  .check .path { color:var(--mute); font-size:12px; font-family: ui-monospace,Menlo,Consolas,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:520px; }
+  .check.ok  .ic { color:var(--ok); border-color: rgba(61,220,151,.4); background: rgba(61,220,151,.10); }
+  .check.bad .ic { color:var(--err); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.10); }
+
+  pre.cmd { background:#05070b; border:1px solid var(--line); border-radius:10px; padding:12px; overflow:auto; font-size:12.5px; color:#cfd5e3; font-family: ui-monospace,Menlo,Consolas,monospace; }
+  details summary { cursor:pointer; color:var(--mute); padding:4px 0; }
+  details[open] summary { color:var(--text); }
+
+  .console {
+    background:#04060b; border:1px solid var(--line); border-radius:10px;
+    padding:12px; font-family: ui-monospace,Menlo,Consolas,monospace; font-size:12.5px;
+    height:240px; overflow:auto; white-space:pre-wrap; color:#cfd5e3;
+  }
+  .console .warn { color:#ffb547; }
+  .toast { position:fixed; right:20px; bottom:20px; background:#1a1f2c; border:1px solid var(--line2); padding:10px 14px; border-radius:10px; opacity:0; transform:translateY(8px); transition:.18s; z-index:50; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .small { font-size:12px; color:var(--mute); }
+  .ok { color:var(--ok); } .err { color:var(--err); } .warn { color:var(--warn); }
+  hr { border:0; border-top:1px solid var(--line); margin:14px 0; }
+  .hide { display:none !important; }
+
+  .view { display:none; } .view.active { display:block; }
+
+  /* Page transitions */
+  .view.active > * { animation: pop .22s ease both; }
+  @keyframes pop { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+
+  @media (max-width:880px) {
+    .app { grid-template-columns: 1fr; }
+    aside { position:relative; height:auto; border-right:0; border-bottom:1px solid var(--line); }
+    .side-foot { position:relative; bottom:auto; left:auto; right:auto; margin-top:14px; }
+    .src-grid { grid-template-columns:1fr; }
+    .grid2 { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <div class="logo">P</div>
+      <div>
+        <div class="name">Proxy-Max</div>
+        <div class="ver">Anthropic-compatible router</div>
+      </div>
+    </div>
+
+    <nav>
+      <div class="nav-section">Workspace</div>
+      <div class="navitem active" data-view="provider">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg> Provider
+      </div>
+      <div class="navitem" data-view="models">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6"/><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg> Models
+      </div>
+      <div class="navitem" data-view="system">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4 2.6-2.6z"/></svg> System
+      </div>
+      <div class="navitem" data-view="launch">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg> Launch CLI
+      </div>
+      <div class="nav-section">Help</div>
+      <div class="navitem" data-view="logs">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h5"/></svg> Diagnostics
+      </div>
+    </nav>
+
+    <div class="side-foot">
+      <div class="health" id="health">
+        <span class="dot"></span>
+        <div class="info">
+          <span class="label">Active proxy</span>
+          <span class="value" id="healthValue">checking…</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <!-- PROVIDER VIEW -->
+    <section class="view active" data-view="provider">
+      <div class="topbar">
+        <div>
+          <h1>Provider</h1>
+          <div class="sub">Pick a source, choose a model, paste keys, save.</div>
+        </div>
+        <div class="pills">
+          <span class="pill" id="cfgPathPill">config: —</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>1. Source <span class="badge" id="srcBadge">choose one</span></h3>
+        <div class="src-grid">
+          <div class="src" data-p="bedrock">
+            <div class="name"><span class="dot"></span>AWS Bedrock</div>
+            <div class="desc">Claude on Bedrock — Anthropic native payload + SigV4.</div>
+          </div>
+          <div class="src" data-p="azure">
+            <div class="name"><span class="dot"></span>Azure AI Foundry</div>
+            <div class="desc">GPT, Phi, Llama, Mistral, DeepSeek, Grok &amp; more.</div>
+          </div>
+          <div class="src" data-p="nvidia">
+            <div class="name"><span class="dot"></span>NVIDIA NIM</div>
+            <div class="desc">build.nvidia.com — DeepSeek V4, Nemotron 3, Kimi, Qwen 3, GLM 5.1…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card hide" id="formCard">
+        <h3>2. Model &amp; credentials <span class="badge" id="provBadge"></span></h3>
+
+        <label>Model</label>
+        <div class="row">
+          <select id="modelSelect" style="flex:2; min-width:260px"></select>
+          <input id="modelCustom" placeholder="…or paste a custom model id" style="flex:3" />
+        </div>
+
+        <div id="azureFields" class="hide">
+          <div class="grid2">
+            <div>
+              <label>Endpoint</label>
+              <input id="az_endpoint" placeholder="https://my-foundry.openai.azure.com  or  https://my-foundry.services.ai.azure.com/models" />
+            </div>
+            <div>
+              <label>API key</label>
+              <input id="az_apiKey" type="password" placeholder="••••••••" />
+            </div>
+          </div>
+          <div class="grid2">
+            <div>
+              <label>Deployment name <span class="small">(AOAI; blank for direct Foundry inference)</span></label>
+              <input id="az_deployment" placeholder="my-gpt4o-deploy" />
+            </div>
+            <div>
+              <label>API version</label>
+              <input id="az_apiVersion" placeholder="2024-10-21" />
+            </div>
+          </div>
+        </div>
+
+        <div id="nvidiaFields" class="hide">
+          <div class="grid2">
+            <div>
+              <label>Endpoint</label>
+              <input id="nv_endpoint" value="https://integrate.api.nvidia.com/v1" />
+            </div>
+            <div>
+              <label>API key</label>
+              <input id="nv_apiKey" type="password" placeholder="nvapi-..." />
+            </div>
+          </div>
+          <div class="small">Tip: get a key at <a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a>.</div>
+        </div>
+
+        <div id="bedrockFields" class="hide">
+          <div class="grid2">
+            <div>
+              <label>AWS region</label>
+              <input id="br_region" placeholder="us-east-1" />
+            </div>
+            <div>
+              <label>Endpoint <span class="small">(optional)</span></label>
+              <input id="br_endpoint" placeholder="https://bedrock-runtime.us-east-1.amazonaws.com" />
+            </div>
+          </div>
+          <div class="grid2">
+            <div>
+              <label>AWS access key id</label>
+              <input id="br_access" />
+            </div>
+            <div>
+              <label>AWS secret access key</label>
+              <input id="br_secret" type="password" placeholder="••••••••" />
+            </div>
+          </div>
+          <label>Session token <span class="small">(optional, for STS / SSO)</span></label>
+          <input id="br_token" type="password" placeholder="" />
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="saveBtn">Save &amp; activate</button>
+          <button class="btn secondary" id="testBtn">Test connection</button>
+          <span id="testResult" class="small"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODELS VIEW -->
+    <section class="view" data-view="models">
+      <div class="topbar">
+        <div>
+          <h1>Models</h1>
+          <div class="sub">Browse the curated catalog. Pick one to use it (also selectable on the Provider page).</div>
+        </div>
+        <div class="pills">
+          <input id="modelSearch" placeholder="filter…" style="max-width:240px;height:32px;padding:6px 10px"/>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Catalog</h3>
+        <div id="modelsBrowser"></div>
+      </div>
+    </section>
+
+    <!-- SYSTEM VIEW -->
+    <section class="view" data-view="system">
+      <div class="topbar">
+        <div>
+          <h1>System</h1>
+          <div class="sub">Detect runtime, admin rights, the Anthropic CLI, and install anything missing.</div>
+        </div>
+        <div class="pills">
+          <button class="btn secondary" id="refreshSys">Re-detect</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Runtime <span class="badge" id="osBadge">—</span></h3>
+        <div class="kv" id="sysKv"></div>
+      </div>
+
+      <div class="card">
+        <h3>Components</h3>
+        <div id="checks"></div>
+        <div class="actions">
+          <button class="btn" id="installAll">Install missing</button>
+          <button class="btn secondary" id="installClaude">Install Anthropic CLI</button>
+          <button class="btn secondary" id="installNode">Install Node + npm</button>
+          <span class="small" id="installHint"></span>
+        </div>
+        <div class="small" style="margin-top:10px">
+          When admin rights aren't available, installs fall back to a per-user prefix
+          (no <code>sudo</code> / no UAC) and a portable Node tarball.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Install console</h3>
+        <div class="console" id="installConsole">Idle.</div>
+      </div>
+
+      <div class="card">
+        <h3>Search PATH</h3>
+        <details>
+          <summary>PATH directories (<span id="pathCount">0</span>)</summary>
+          <pre class="cmd" id="pathList"></pre>
+        </details>
+      </div>
+    </section>
+
+    <!-- LAUNCH VIEW -->
+    <section class="view" data-view="launch">
+      <div class="topbar">
+        <div>
+          <h1>Launch CLI</h1>
+          <div class="sub">Point the official <code>claude</code> CLI at the proxy. Copy + paste — these reflect this server.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>macOS / Linux</h3>
+        <pre class="cmd" id="cmdUnix"></pre>
+      </div>
+      <div class="card">
+        <h3>Windows (PowerShell)</h3>
+        <pre class="cmd" id="cmdWin"></pre>
+      </div>
+      <div class="card">
+        <h3>One-shot bootstrap (any OS)</h3>
+        <pre class="cmd" id="cmdBoot"></pre>
+        <div class="small">The bootstrap script ensures Node, npm, and the Anthropic CLI are present (admin or per-user), starts this server, and execs <code>claude</code>.</div>
+      </div>
+    </section>
+
+    <!-- LOGS VIEW -->
+    <section class="view" data-view="logs">
+      <div class="topbar">
+        <div>
+          <h1>Diagnostics</h1>
+          <div class="sub">Quick endpoints to inspect proxy state.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Panel Event Test</h3>
+        <div class="actions" style="margin-top:0">
+          <button class="btn secondary" id="panelRefresh">Refresh</button>
+          <button class="btn" id="panelImpression">Send impression</button>
+          <button class="btn" id="panelClick">Send click</button>
+          <button class="btn danger" id="panelReset">Reset</button>
+        </div>
+        <div class="kv" style="margin-top:12px" id="panelSummary"></div>
+        <details style="margin-top:10px" open>
+          <summary>Latest events</summary>
+          <pre class="cmd" id="panelEvents">(empty)</pre>
+        </details>
+      </div>
+
+      <div class="card">
+        <h3>Endpoints</h3>
+        <div class="kv">
+          <span class="k">Health</span><span class="v"><a href="/api/health" target="_blank">/api/health</a></span>
+          <span class="k">System</span><span class="v"><a href="/api/system" target="_blank">/api/system</a></span>
+          <span class="k">Models</span><span class="v"><a href="/api/models" target="_blank">/api/models</a></span>
+          <span class="k">Config</span><span class="v"><a href="/api/config" target="_blank">/api/config</a> (secrets masked)</span>
+          <span class="k">Panel event</span><span class="v">POST <a href="/api/panel/event" target="_blank">/api/panel/event</a></span>
+          <span class="k">Panel summary</span><span class="v"><a href="/api/panel/summary" target="_blank">/api/panel/summary</a></span>
+          <span class="k">Panel events</span><span class="v"><a href="/api/panel/events" target="_blank">/api/panel/events</a></span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const $ = sel => document.querySelector(sel);
+const state = { provider:null, models:{}, config:{providers:{}}, system:null };
+
+function toast(msg, ok=true) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.style.color = ok ? '' : 'var(--err)';
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// --- Routing ---
+function navTo(view) {
+  for (const el of document.querySelectorAll('.navitem')) el.classList.toggle('active', el.dataset.view === view);
+  for (const el of document.querySelectorAll('.view'))    el.classList.toggle('active', el.dataset.view === view);
+  if (view === 'system') refreshSystem();
+  if (view === 'models') renderModelsBrowser();
+  if (view === 'logs') refreshPanelTest();
+}
+document.addEventListener('click', e => {
+  const ni = e.target.closest('.navitem'); if (ni) navTo(ni.dataset.view);
+  const src = e.target.closest('.src');    if (src) selectProvider(src.dataset.p);
+});
+
+// --- Bootstrap data ---
+async function loadAll() {
+  const [m, c, h] = await Promise.all([
+    fetch('/api/models').then(r=>r.json()),
+    fetch('/api/config').then(r=>r.json()),
+    fetch('/api/health').then(r=>r.json())
+  ]);
+  state.models = m;
+  state.config = c;
+  $('#cfgPathPill').textContent = 'config: ' + (c.configPath || '—');
+  setHealth(h);
+  if (c.provider) selectProvider(c.provider);
+  renderCommands();
+}
+
+function setHealth(h) {
+  const el = $('#health');
+  const v = $('#healthValue');
+  if (h.provider && h.model) {
+    el.classList.remove('warn'); el.classList.add('ok');
+    v.textContent = `${h.provider} · ${h.model}`;
+  } else {
+    el.classList.remove('ok'); el.classList.add('warn');
+    v.textContent = 'not configured';
+  }
+}
+
+// --- Provider selection / form ---
+function fillModelSelect(p) {
+  const sel = $('#modelSelect');
+  sel.innerHTML = '';
+  const groups = state.models[p] || [];
+  for (const g of groups) {
+    const og = document.createElement('optgroup');
+    og.label = g.group;
+    for (const m of g.models) {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.label + ' — ' + m.id;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+}
+
+function selectProvider(p) {
+  state.provider = p;
+  for (const el of document.querySelectorAll('.src')) el.classList.toggle('active', el.dataset.p === p);
+  $('#formCard').classList.remove('hide');
+  $('#srcBadge').textContent = ({bedrock:'AWS Bedrock', azure:'Azure AI Foundry', nvidia:'NVIDIA NIM'})[p];
+  $('#provBadge').textContent = ({bedrock:'aws', azure:'azure', nvidia:'nvidia'})[p];
+  $('#azureFields').classList.toggle('hide', p!=='azure');
+  $('#nvidiaFields').classList.toggle('hide', p!=='nvidia');
+  $('#bedrockFields').classList.toggle('hide', p!=='bedrock');
+
+  fillModelSelect(p);
+
+  const saved = (state.config.providers || {})[p] || {};
+  if (saved.model) {
+    const exists = [...$('#modelSelect').options].some(o => o.value === saved.model);
+    if (exists) $('#modelSelect').value = saved.model; else $('#modelCustom').value = saved.model;
+  } else { $('#modelCustom').value = ''; }
+  if (p === 'azure') {
+    $('#az_endpoint').value = saved.endpoint || '';
+    $('#az_apiKey').value = saved.apiKey || '';
+    $('#az_deployment').value = saved.deployment || '';
+    $('#az_apiVersion').value = saved.apiVersion || '2024-10-21';
+  } else if (p === 'nvidia') {
+    $('#nv_endpoint').value = saved.endpoint || 'https://integrate.api.nvidia.com/v1';
+    $('#nv_apiKey').value = saved.apiKey || '';
+  } else if (p === 'bedrock') {
+    $('#br_region').value = saved.region || 'us-east-1';
+    $('#br_endpoint').value = saved.endpoint || '';
+    $('#br_access').value = saved.accessKeyId || '';
+    $('#br_secret').value = saved.secretAccessKey || '';
+    $('#br_token').value = saved.sessionToken || '';
+  }
+  renderCommands();
+}
+
+function gatherConfig() {
+  const p = state.provider;
+  const model = ($('#modelCustom').value.trim()) || $('#modelSelect').value;
+  if (p === 'azure') return { model,
+    endpoint: $('#az_endpoint').value.trim(),
+    apiKey: $('#az_apiKey').value,
+    deployment: $('#az_deployment').value.trim(),
+    apiVersion: $('#az_apiVersion').value.trim() || '2024-10-21' };
+  if (p === 'nvidia') return { model,
+    endpoint: $('#nv_endpoint').value.trim() || 'https://integrate.api.nvidia.com/v1',
+    apiKey: $('#nv_apiKey').value };
+  if (p === 'bedrock') return { model,
+    region: $('#br_region').value.trim() || 'us-east-1',
+    endpoint: $('#br_endpoint').value.trim(),
+    accessKeyId: $('#br_access').value.trim(),
+    secretAccessKey: $('#br_secret').value,
+    sessionToken: $('#br_token').value };
+}
+
+async function save() {
+  const cfg = gatherConfig();
+  if (!cfg.model) return toast('Pick or enter a model id', false);
+  const r = await fetch('/api/config', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ provider: state.provider, config: cfg })
+  });
+  if (!r.ok) return toast('Save failed', false);
+  toast('Saved & activated');
+  state.config = await fetch('/api/config').then(r=>r.json());
+  setHealth(await fetch('/api/health').then(r=>r.json()));
+  renderCommands();
+}
+
+async function testConn() {
+  const cfg = gatherConfig();
+  $('#testResult').innerHTML = '<span class="small">testing…</span>';
+  try {
+    const r = await fetch('/api/test', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ provider: state.provider, config: cfg })
+    });
+    const j = await r.json();
+    if (j.ok) $('#testResult').innerHTML = '<span class="ok">✓ reachable</span> <span class="small">— ' + escapeHtml((j.sample||'').slice(0,180)) + '</span>';
+    else      $('#testResult').innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>';
+  } catch (e) { $('#testResult').innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// --- Models browser ---
+function renderModelsBrowser() {
+  const root = $('#modelsBrowser');
+  const q = ($('#modelSearch').value || '').toLowerCase();
+  const labels = { bedrock:'AWS Bedrock', azure:'Azure AI Foundry', nvidia:'NVIDIA NIM' };
+  const html = [];
+  for (const p of ['bedrock','azure','nvidia']) {
+    const groups = state.models[p] || [];
+    const matched = groups.map(g => ({
+      group: g.group,
+      models: g.models.filter(m => !q || m.id.toLowerCase().includes(q) || m.label.toLowerCase().includes(q))
+    })).filter(g => g.models.length);
+    if (!matched.length) continue;
+    html.push(`<h4 style="margin:14px 0 6px;color:var(--text)">${labels[p]}</h4>`);
+    for (const g of matched) {
+      html.push(`<div class="small" style="margin:8px 0 4px;color:var(--mute)">${escapeHtml(g.group)}</div>`);
+      for (const m of g.models) {
+        html.push(`
+          <div class="check">
+            <div class="left">
+              <div class="ic">${p[0].toUpperCase()}</div>
+              <div class="meta">
+                <div class="title">${escapeHtml(m.label)}</div>
+                <div class="path">${escapeHtml(m.id)}</div>
+              </div>
+            </div>
+            <button class="btn secondary" data-use="${p}|${escapeHtml(m.id)}">Use</button>
+          </div>`);
+      }
+    }
+  }
+  root.innerHTML = html.join('');
+  for (const b of root.querySelectorAll('button[data-use]')) {
+    b.addEventListener('click', () => {
+      const [p, id] = b.dataset.use.split('|');
+      navTo('provider');
+      selectProvider(p);
+      const sel = $('#modelSelect');
+      const has = [...sel.options].some(o => o.value === id);
+      if (has) { sel.value = id; $('#modelCustom').value=''; }
+      else { $('#modelCustom').value = id; }
+      toast('Loaded into form — set creds & save');
+    });
+  }
+}
+document.addEventListener('input', e => {
+  if (e.target.id === 'modelSearch') renderModelsBrowser();
+});
+
+// --- System ---
+async function refreshSystem() {
+  const sys = await fetch('/api/system').then(r=>r.json());
+  state.system = sys;
+  $('#osBadge').textContent = `${sys.platform}/${sys.arch}`;
+  const kv = $('#sysKv');
+  kv.innerHTML = '';
+  const rows = [
+    ['User', sys.user],
+    ['Home', sys.home],
+    ['Admin / root', sys.admin ? '<span class="ok">yes</span>' : '<span class="warn">no — installs use per-user prefix</span>'],
+    ['Home writable', sys.writableHome ? '<span class="ok">yes</span>' : '<span class="err">no</span>'],
+    ['Per-user npm prefix', sys.npmPrefix],
+    ['Portable Node dir', sys.portableNodeDir],
+    ['Cache dir', sys.proxyHome]
+  ];
+  for (const [k,v] of rows) kv.insertAdjacentHTML('beforeend', `<div class="k">${k}</div><div class="v">${v}</div>`);
+
+  const checks = $('#checks');
+  checks.innerHTML = '';
+  for (const [name, key, ic, hint] of [
+    ['Node.js',         'node',   'N', 'Required to run this proxy & npm packages.'],
+    ['npm',             'npm',    'n', 'Used to install the Anthropic CLI.'],
+    ['Anthropic CLI',   'claude', 'C', 'The `claude` binary that this proxy translates for.']
+  ]) {
+    const c = sys.components[key];
+    const ok = !!c.ok;
+    checks.insertAdjacentHTML('beforeend', `
+      <div class="check ${ok?'ok':'bad'}">
+        <div class="left">
+          <div class="ic">${ic}</div>
+          <div class="meta">
+            <div class="title">${name} ${ok?`<span class="ok">— ${escapeHtml(c.version||'')}</span>`:'<span class="err">— missing</span>'}</div>
+            <div class="path">${escapeHtml(c.path || hint)}</div>
+          </div>
+        </div>
+        <span class="pill ${ok?'ok':'err'}"><span class="dot"></span>${ok?'detected':'missing'}</span>
+      </div>`);
+  }
+
+  $('#pathCount').textContent = sys.pathDirs.length;
+  $('#pathList').textContent = sys.pathDirs.join('\n');
+
+  const allOk = sys.components.node.ok && sys.components.npm.ok && sys.components.claude.ok;
+  $('#installAll').disabled = allOk;
+  $('#installAll').textContent = allOk ? 'All set' : 'Install missing';
+  $('#installHint').innerHTML = sys.admin
+    ? '<span class="ok">admin detected</span> — global installs available'
+    : '<span class="warn">no admin</span> — installs go to <code>'+escapeHtml(sys.npmPrefix)+'</code>';
+}
+
+async function refreshPanelTest() {
+  try {
+    const [s, e] = await Promise.all([
+      fetch('/api/panel/summary').then(r => r.json()),
+      fetch('/api/panel/events?limit=20').then(r => r.json())
+    ]);
+    const summary = (s && s.summary) || {};
+    $('#panelSummary').innerHTML = `
+      <div class="k">Total events</div><div class="v">${summary.total || 0}</div>
+      <div class="k">Impressions</div><div class="v">${summary.impressions || 0}</div>
+      <div class="k">Clicks</div><div class="v">${summary.clicks || 0}</div>
+      <div class="k">CTR</div><div class="v">${summary.ctr || 0}</div>
+      <div class="k">Watch ms total</div><div class="v">${summary.watchMsTotal || 0}</div>
+    `;
+    $('#panelEvents').textContent = JSON.stringify((e && e.events) || [], null, 2) || '(empty)';
+  } catch (err) {
+    $('#panelSummary').innerHTML = '<div class="k">Error</div><div class="v err">' + escapeHtml(err.message) + '</div>';
+    $('#panelEvents').textContent = '(error)';
+  }
+}
+
+function makeTestEvent(type) {
+  const ts = Date.now();
+  return {
+    type,
+    adId: 'test-ad-1',
+    impressionId: `imp-${ts}`,
+    sessionId: 'local-session',
+    watchMs: type === 'impression' ? 4500 : 0,
+    source: 'ui-test'
+  };
+}
+
+async function postPanelEvent(type) {
+  const payload = makeTestEvent(type);
+  const r = await fetch('/api/panel/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'failed');
+  await refreshPanelTest();
+}
+
+async function resetPanelEvents() {
+  await fetch('/api/panel/reset', { method: 'POST' });
+  await refreshPanelTest();
+}
+
+async function runInstall(what) {
+  const con = $('#installConsole');
+  con.textContent = '';
+  const sys = state.system || await fetch('/api/system').then(r=>r.json());
+  const r = await fetch(`/api/install?what=${encodeURIComponent(what)}&admin=${sys.admin?1:0}`, { method:'POST' });
+  const reader = r.body.getReader(); const dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream:true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const chunk = buf.slice(0, idx); buf = buf.slice(idx+2);
+      const lines = chunk.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
+      for (const l of lines) {
+        try {
+          const evt = JSON.parse(l);
+          if (evt.type === 'log') {
+            const cls = evt.level === 'warn' ? 'warn' : '';
+            con.insertAdjacentHTML('beforeend', `<span class="${cls}">${escapeHtml(evt.msg)}</span>`);
+            con.scrollTop = con.scrollHeight;
+          } else if (evt.type === 'done') {
+            con.insertAdjacentHTML('beforeend', `\n[exit ${evt.code}]\n`);
+            if (evt.system) { state.system = evt.system; await refreshSystem(); }
+          }
+        } catch {}
+      }
+    }
+  }
+}
+
+$('#refreshSys').addEventListener('click', refreshSystem);
+$('#installAll').addEventListener('click', () => runInstall('all'));
+$('#installClaude').addEventListener('click', () => runInstall('claude'));
+$('#installNode').addEventListener('click', () => runInstall('node'));
+$('#panelRefresh').addEventListener('click', refreshPanelTest);
+$('#panelImpression').addEventListener('click', async () => {
+  try { await postPanelEvent('impression'); toast('impression sent'); }
+  catch (e) { toast(e.message, false); }
+});
+$('#panelClick').addEventListener('click', async () => {
+  try { await postPanelEvent('click'); toast('click sent'); }
+  catch (e) { toast(e.message, false); }
+});
+$('#panelReset').addEventListener('click', async () => {
+  try { await resetPanelEvents(); toast('panel events reset'); }
+  catch (e) { toast(e.message, false); }
+});
+
+// --- Launch commands ---
+function renderCommands() {
+  const base = location.origin;
+  $('#cmdUnix').textContent =
+`export ANTHROPIC_BASE_URL="${base}"
+export ANTHROPIC_AUTH_TOKEN="proxy-max"   # any non-empty value
+claude`;
+  $('#cmdWin').textContent =
+`$env:ANTHROPIC_BASE_URL = "${base}"
+$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"
+claude`;
+  $('#cmdBoot').textContent =
+`# macOS / Linux
+bash ./bootstrap.sh --claude
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File .\\bootstrap.ps1 --claude`;
+}
+
+$('#saveBtn').addEventListener('click', save);
+$('#testBtn').addEventListener('click', testConn);
+loadAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+node_modules/
+config.json
+.proxy-max/
+*.log
+.DS_Store
+panel-events.json
