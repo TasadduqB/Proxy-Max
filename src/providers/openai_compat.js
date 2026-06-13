@@ -231,11 +231,14 @@ async function streamResponsesApi(upstream, emitter) {
           function: { arguments: evt.delta || '' }
         });
         break;
-      case 'response.completed': {
+      case 'response.completed':
+      case 'response.incomplete': {
         const resp = evt.response || {};
         if (resp.usage) emitter.setUsage(resp.usage);
-        const status = resp.status;
-        emitter.setStopReason(status === 'completed' ? 'stop' : 'stop');
+        // Truncation (e.g. reasoning model hitting the token cap) -> max_tokens.
+        const truncated = resp.status === 'incomplete' ||
+          resp.incomplete_details?.reason === 'max_output_tokens';
+        emitter.setStopReason(truncated ? 'length' : 'stop');
         break;
       }
     }
@@ -262,14 +265,16 @@ function parseResponse(json, isResponsesApi) {
     const outputMsg = json.output.find(o => o.type === 'message');
     const textPart = outputMsg?.content?.find(c => c.type === 'output_text');
     const toolItems = (json.output || []).filter(o => o.type === 'function_call');
+    const truncated = json.status === 'incomplete' ||
+      json.incomplete_details?.reason === 'max_output_tokens';
     return {
       text: textPart?.text || '',
       toolCalls: toolItems.map(tc => ({
         id: tc.id, name: tc.name, arguments: tc.arguments
       })),
       // The Responses API has no per-message finish_reason; infer tool_use from
-      // the presence of function_call items so the CLI knows to run the tool.
-      stopReason: toolItems.length ? 'tool_calls' : 'stop'
+      // the presence of function_call items, and length when truncated.
+      stopReason: toolItems.length ? 'tool_calls' : (truncated ? 'length' : 'stop')
     };
   }
 

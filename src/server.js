@@ -69,6 +69,72 @@ function activeProviderConfig() {
   return { kind, ...p };
 }
 
+// ---- Rate limiting (sliding 60s window for requests + tokens) ----
+
+const DEFAULT_LIMITS = { enabled: true, rpm: 10000, tpm: 1000000 };
+
+function getLimits() {
+  const l = CONFIG.limits || {};
+  return {
+    enabled: l.enabled !== false,
+    rpm: Number.isFinite(Number(l.rpm)) ? Number(l.rpm) : DEFAULT_LIMITS.rpm,
+    tpm: Number.isFinite(Number(l.tpm)) ? Number(l.tpm) : DEFAULT_LIMITS.tpm
+  };
+}
+
+class RateLimiter {
+  constructor() { this.reqs = []; this.toks = []; }
+  prune(now) {
+    const cutoff = now - 60000;
+    while (this.reqs.length && this.reqs[0] < cutoff) this.reqs.shift();
+    while (this.toks.length && this.toks[0].ts < cutoff) this.toks.shift();
+  }
+  tokenSum() { return this.toks.reduce((s, t) => s + t.n, 0); }
+  // Returns { ok } or { ok:false, reason, retryAfter }
+  check(now, { rpm, tpm }) {
+    this.prune(now);
+    if (rpm > 0 && this.reqs.length >= rpm) {
+      const retryAfter = Math.max(1, Math.ceil((this.reqs[0] + 60000 - now) / 1000));
+      return { ok: false, reason: 'rpm', retryAfter, limit: rpm, current: this.reqs.length };
+    }
+    if (tpm > 0 && this.tokenSum() >= tpm) {
+      const retryAfter = this.toks.length ? Math.max(1, Math.ceil((this.toks[0].ts + 60000 - now) / 1000)) : 60;
+      return { ok: false, reason: 'tpm', retryAfter, limit: tpm, current: this.tokenSum() };
+    }
+    return { ok: true };
+  }
+  recordRequest(now) { this.reqs.push(now); }
+  recordTokens(now, n) { if (n > 0) this.toks.push({ ts: now, n }); }
+}
+
+const limiter = new RateLimiter();
+
+// Tee res.write/res.end to extract real token usage from the response (works
+// for both non-streaming JSON usage objects and streaming SSE message events).
+function sniffUsage(res, onUsage) {
+  const origWrite = res.write.bind(res);
+  const origEnd = res.end.bind(res);
+  let buf = '';
+  let reported = false;
+  const scan = (chunk) => {
+    if (!chunk) return;
+    buf += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+    if (buf.length > 262144) buf = buf.slice(-262144);
+  };
+  const report = () => {
+    if (reported) return;
+    reported = true;
+    const ins = [...buf.matchAll(/"input_tokens":\s*(\d+)/g)];
+    const outs = [...buf.matchAll(/"output_tokens":\s*(\d+)/g)];
+    const input = ins.length ? Number(ins[ins.length - 1][1]) : 0;
+    const output = outs.length ? Number(outs[outs.length - 1][1]) : 0;
+    onUsage(input + output);
+  };
+  res.write = (chunk, ...a) => { scan(chunk); return origWrite(chunk, ...a); };
+  res.end = (chunk, ...a) => { scan(chunk); report(); return origEnd(chunk, ...a); };
+  return res;
+}
+
 async function handleMessages(req, res) {
   const cfg = activeProviderConfig();
   if (!cfg || !cfg.model) {
@@ -77,6 +143,25 @@ async function handleMessages(req, res) {
       error: { type: 'configuration_error', message: 'Proxy not configured. Open the UI and pick a provider/model.' }
     });
   }
+
+  // Enforce local rate limits before doing any upstream work.
+  const limits = getLimits();
+  if (limits.enabled) {
+    const now = Date.now();
+    const verdict = limiter.check(now, limits);
+    if (!verdict.ok) {
+      return send(res, 429, {
+        type: 'error',
+        error: {
+          type: 'rate_limit_error',
+          message: `Local proxy ${verdict.reason.toUpperCase()} limit reached (${verdict.current}/${verdict.limit} in the last 60s). Retry in ${verdict.retryAfter}s.`
+        }
+      }, { 'retry-after': String(verdict.retryAfter) });
+    }
+    limiter.recordRequest(now);
+    res = sniffUsage(res, n => limiter.recordTokens(Date.now(), n));
+  }
+
   let body;
   try { body = await readJSONBody(req); }
   catch { return send(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'Bad JSON' } }); }
@@ -126,6 +211,34 @@ async function handleConfigPost(req, res) {
   CONFIG.providers[body.provider] = merged;
   saveConfig(CONFIG);
   send(res, 200, { ok: true });
+}
+
+function handleLimitsGet(_req, res) {
+  const now = Date.now();
+  limiter.prune(now);
+  send(res, 200, {
+    limits: getLimits(),
+    usage: { rpm: limiter.reqs.length, tpm: limiter.tokenSum(), windowSeconds: 60 }
+  });
+}
+
+async function handleLimitsPost(req, res) {
+  const body = await readJSONBody(req);
+  const next = { ...DEFAULT_LIMITS, ...(CONFIG.limits || {}) };
+  if (typeof body.enabled === 'boolean') next.enabled = body.enabled;
+  if (body.rpm != null) {
+    const n = Number(body.rpm);
+    if (!Number.isFinite(n) || n < 0) return send(res, 400, { error: 'rpm must be a non-negative number' });
+    next.rpm = Math.floor(n);
+  }
+  if (body.tpm != null) {
+    const n = Number(body.tpm);
+    if (!Number.isFinite(n) || n < 0) return send(res, 400, { error: 'tpm must be a non-negative number' });
+    next.tpm = Math.floor(n);
+  }
+  CONFIG.limits = next;
+  saveConfig(CONFIG);
+  send(res, 200, { ok: true, limits: getLimits() });
 }
 
 async function handleTest(req, res) {
@@ -357,6 +470,8 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/config' && req.method === 'GET') return handleConfigGet(req, res);
     if (u.pathname === '/api/config' && req.method === 'POST') return await handleConfigPost(req, res);
     if (u.pathname === '/api/test' && req.method === 'POST') return await handleTest(req, res);
+    if (u.pathname === '/api/limits' && req.method === 'GET') return handleLimitsGet(req, res);
+    if (u.pathname === '/api/limits' && req.method === 'POST') return await handleLimitsPost(req, res);
     if (u.pathname === '/api/panel/event' && req.method === 'POST') return await handlePanelEventPost(req, res);
     if (u.pathname === '/api/panel/events' && req.method === 'GET') return handlePanelEventsGet(req, res);
     if (u.pathname === '/api/panel/summary' && req.method === 'GET') return handlePanelSummaryGet(req, res);

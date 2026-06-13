@@ -325,6 +325,29 @@
           <span id="testResult" class="small"></span>
         </div>
       </div>
+
+      <div class="card" id="limitsCard">
+        <h3>3. Rate limits <span class="badge" id="limitsBadge">per 60s</span></h3>
+        <div class="sub">Throttle requests before they hit the upstream. Match your deployment's quota (e.g. 1M TPM / 10K RPM). Set 0 to disable a limit.</div>
+        <div class="grid2">
+          <div>
+            <label>Tokens per minute (TPM)</label>
+            <input id="lim_tpm" type="number" min="0" step="1000" placeholder="1000000" />
+          </div>
+          <div>
+            <label>Requests per minute (RPM)</label>
+            <input id="lim_rpm" type="number" min="0" step="100" placeholder="10000" />
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer">
+          <input id="lim_enabled" type="checkbox" style="width:auto" /> Enforce these limits
+        </label>
+        <div class="actions">
+          <button class="btn" id="limitsSaveBtn">Save limits</button>
+          <span id="limitsResult" class="small"></span>
+        </div>
+        <div class="small" id="limitsUsage" style="margin-top:8px;color:var(--mute)"></div>
+      </div>
     </section>
 
     <!-- MODELS VIEW -->
@@ -483,17 +506,48 @@ document.addEventListener('click', e => {
 
 // --- Bootstrap data ---
 async function loadAll() {
-  const [m, c, h] = await Promise.all([
+  const [m, c, h, l] = await Promise.all([
     fetch('/api/models').then(r=>r.json()),
     fetch('/api/config').then(r=>r.json()),
-    fetch('/api/health').then(r=>r.json())
+    fetch('/api/health').then(r=>r.json()),
+    fetch('/api/limits').then(r=>r.json()).catch(()=>null)
   ]);
   state.models = m;
   state.config = c;
   $('#cfgPathPill').textContent = 'config: ' + (c.configPath || '—');
   setHealth(h);
+  if (l) applyLimits(l);
   if (c.provider) selectProvider(c.provider);
   renderCommands();
+}
+
+function applyLimits(l) {
+  const lim = l.limits || {};
+  $('#lim_tpm').value = lim.tpm ?? '';
+  $('#lim_rpm').value = lim.rpm ?? '';
+  $('#lim_enabled').checked = lim.enabled !== false;
+  if (l.usage) {
+    $('#limitsUsage').textContent =
+      `Current window: ${l.usage.rpm} requests, ${l.usage.tpm.toLocaleString()} tokens in the last ${l.usage.windowSeconds}s.`;
+  }
+}
+
+async function saveLimits() {
+  const payload = {
+    tpm: Number($('#lim_tpm').value || 0),
+    rpm: Number($('#lim_rpm').value || 0),
+    enabled: $('#lim_enabled').checked
+  };
+  $('#limitsResult').innerHTML = '<span class="small">saving…</span>';
+  try {
+    const r = await fetch('/api/limits', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if (r.ok) { $('#limitsResult').innerHTML = '<span class="ok">✓ saved</span>'; applyLimits(j); }
+    else $('#limitsResult').innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>';
+  } catch (e) { $('#limitsResult').innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
 }
 
 function setHealth(h) {
@@ -840,6 +894,7 @@ powershell -ExecutionPolicy Bypass -File .\\bootstrap.ps1 --claude`;
 
 $('#saveBtn').addEventListener('click', save);
 $('#testBtn').addEventListener('click', testConn);
+$('#limitsSaveBtn').addEventListener('click', saveLimits);
 loadAll();
 </script>
 </body>
