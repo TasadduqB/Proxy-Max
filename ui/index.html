@@ -260,8 +260,8 @@
         <div id="azureFields" class="hide">
           <div class="grid2">
             <div>
-              <label>Endpoint</label>
-              <input id="az_endpoint" placeholder="https://my-foundry.openai.azure.com  or  https://my-foundry.services.ai.azure.com/models" />
+              <label>Endpoint <span class="small">(base URL or full path)</span></label>
+              <input id="az_endpoint" placeholder="https://my-foundry.openai.azure.com  — or paste full path e.g. …/openai/responses" />
             </div>
             <div>
               <label>API key</label>
@@ -274,7 +274,7 @@
               <input id="az_deployment" placeholder="my-gpt4o-deploy" />
             </div>
             <div>
-              <label>API version</label>
+              <label>API version <span class="small">(new models need 2025-04-01-preview)</span></label>
               <input id="az_apiVersion" placeholder="2024-10-21" />
             </div>
           </div>
@@ -283,15 +283,15 @@
         <div id="nvidiaFields" class="hide">
           <div class="grid2">
             <div>
-              <label>Endpoint</label>
-              <input id="nv_endpoint" value="https://integrate.api.nvidia.com/v1" />
+              <label>Endpoint <span class="small">(paste a build.nvidia.com model URL or leave default)</span></label>
+              <input id="nv_endpoint" placeholder="https://integrate.api.nvidia.com/v1  — or https://build.nvidia.com/deepseek-ai/deepseek-v4-pro" />
             </div>
             <div>
               <label>API key</label>
               <input id="nv_apiKey" type="password" placeholder="nvapi-..." />
             </div>
           </div>
-          <div class="small">Tip: get a key at <a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a>.</div>
+          <div class="small">Tip: paste any <a href="https://build.nvidia.com/models" target="_blank" rel="noopener">build.nvidia.com/models</a> page URL — the model ID is auto-extracted. Get a free key at build.nvidia.com.</div>
         </div>
 
         <div id="bedrockFields" class="hide">
@@ -546,9 +546,9 @@ function selectProvider(p) {
     $('#az_endpoint').value = saved.endpoint || '';
     $('#az_apiKey').value = saved.apiKey || '';
     $('#az_deployment').value = saved.deployment || '';
-    $('#az_apiVersion').value = saved.apiVersion || '2024-10-21';
+    $('#az_apiVersion').value = saved.apiVersion || '';
   } else if (p === 'nvidia') {
-    $('#nv_endpoint').value = saved.endpoint || 'https://integrate.api.nvidia.com/v1';
+    $('#nv_endpoint').value = saved.endpoint || '';
     $('#nv_apiKey').value = saved.apiKey || '';
   } else if (p === 'bedrock') {
     $('#br_region').value = saved.region || 'us-east-1';
@@ -560,6 +560,11 @@ function selectProvider(p) {
   renderCommands();
 }
 
+function extractNvidiaModelFromUrl(url) {
+  const m = (url || '').match(/^https?:\/\/build\.nvidia\.com\/([^?#]+?)\/?$/);
+  return m ? m[1] : null;
+}
+
 function gatherConfig() {
   const p = state.provider;
   const model = ($('#modelCustom').value.trim()) || $('#modelSelect').value;
@@ -567,10 +572,17 @@ function gatherConfig() {
     endpoint: $('#az_endpoint').value.trim(),
     apiKey: $('#az_apiKey').value,
     deployment: $('#az_deployment').value.trim(),
-    apiVersion: $('#az_apiVersion').value.trim() || '2024-10-21' };
-  if (p === 'nvidia') return { model,
-    endpoint: $('#nv_endpoint').value.trim() || 'https://integrate.api.nvidia.com/v1',
-    apiKey: $('#nv_apiKey').value };
+    apiVersion: $('#az_apiVersion').value.trim() };
+  if (p === 'nvidia') {
+    const rawEndpoint = $('#nv_endpoint').value.trim();
+    // If a build.nvidia.com model page URL was pasted, extract model and normalise endpoint.
+    const buildModel = extractNvidiaModelFromUrl(rawEndpoint);
+    return {
+      model: model || buildModel || '',
+      endpoint: buildModel ? 'https://integrate.api.nvidia.com/v1' : (rawEndpoint || 'https://integrate.api.nvidia.com/v1'),
+      apiKey: $('#nv_apiKey').value
+    };
+  }
   if (p === 'bedrock') return { model,
     region: $('#br_region').value.trim() || 'us-east-1',
     endpoint: $('#br_endpoint').value.trim(),

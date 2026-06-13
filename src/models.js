@@ -97,13 +97,16 @@ module.exports = {
     },
     { group: 'DeepSeek',
       models: [
-        { id: 'deepseek-ai/deepseek-v4-pro',     label: 'DeepSeek V4 Pro (1M ctx, MoE)' },
-        { id: 'deepseek-ai/deepseek-v4-flash',   label: 'DeepSeek V4 Flash (284B MoE, 1M ctx)' },
-        { id: 'deepseek-ai/deepseek-r1',         label: 'DeepSeek R1' },
-        { id: 'deepseek-ai/deepseek-r1-0528',    label: 'DeepSeek R1 (05-28)' },
+        { id: 'deepseek-ai/deepseek-v4-pro',               label: 'DeepSeek V4 Pro (1.6T MoE, 1M ctx)' },
+        { id: 'deepseek-ai/deepseek-v4-flash',             label: 'DeepSeek V4 Flash (284B MoE, 1M ctx)' },
+        { id: 'deepseek-ai/deepseek-v3.1-terminus',        label: 'DeepSeek V3.1 Terminus' },
+        { id: 'deepseek-ai/deepseek-v3-0324',              label: 'DeepSeek V3 (03-24)' },
+        { id: 'deepseek-ai/deepseek-r1-0528',              label: 'DeepSeek R1 (05-28)' },
+        { id: 'deepseek-ai/deepseek-r1',                   label: 'DeepSeek R1' },
         { id: 'deepseek-ai/deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 Distill Llama 70B' },
+        { id: 'deepseek-ai/deepseek-r1-distill-llama-8b',  label: 'DeepSeek R1 Distill Llama 8B' },
         { id: 'deepseek-ai/deepseek-r1-distill-qwen-32b',  label: 'DeepSeek R1 Distill Qwen 32B' },
-        { id: 'deepseek-ai/deepseek-v3-0324',    label: 'DeepSeek V3 (03-24)' }
+        { id: 'deepseek-ai/deepseek-r1-distill-qwen-7b',   label: 'DeepSeek R1 Distill Qwen 7B' }
       ]
     },
     { group: 'Meta — Llama',
@@ -157,11 +160,16 @@ module.exports = {
     },
     { group: 'IBM / Microsoft / Other',
       models: [
-        { id: 'ibm/granite-3.0-8b-instruct',    label: 'Granite 3.0 8B Instruct' },
-        { id: 'ibm/granite-3.0-3b-a800m-instruct', label: 'Granite 3.0 3B-A800M Instruct' },
-        { id: 'microsoft/phi-4',                label: 'Phi-4' },
-        { id: 'microsoft/phi-3.5-moe-instruct', label: 'Phi-3.5 MoE Instruct' },
-        { id: 'nv-mistralai/mistral-nemo-12b-instruct', label: 'Mistral Nemo 12B Instruct (NV)' }
+        { id: 'ibm/granite-3.0-8b-instruct',            label: 'Granite 3.0 8B Instruct' },
+        { id: 'ibm/granite-3.0-3b-a800m-instruct',      label: 'Granite 3.0 3B-A800M Instruct' },
+        { id: 'microsoft/phi-4',                         label: 'Phi-4' },
+        { id: 'microsoft/phi-4-mini-instruct',           label: 'Phi-4 Mini Instruct' },
+        { id: 'microsoft/phi-4-mini-flash-reasoning',    label: 'Phi-4 Mini Flash Reasoning' },
+        { id: 'microsoft/phi-3.5-moe-instruct',          label: 'Phi-3.5 MoE Instruct' },
+        { id: 'nv-mistralai/mistral-nemo-12b-instruct',  label: 'Mistral Nemo 12B Instruct (NV)' },
+        { id: 'upstage/solar-pro',                       label: 'Solar Pro (Upstage)' },
+        { id: 'sarvam/sarvam-m',                         label: 'Sarvam M (Indic languages)' },
+        { id: 'openai/gpt-oss-120b',                     label: 'OpenAI GPT-OSS 120B' }
       ]
     }
   ]
