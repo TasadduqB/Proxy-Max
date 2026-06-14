@@ -1,0 +1,20 @@
+{
+  "name": "proxy-max",
+  "version": "1.0.0",
+  "description": "Local proxy that speaks the Anthropic Messages API and routes to AWS Bedrock, Azure AI Foundry, or NVIDIA NIM. Ships a config UI and bootstraps the Anthropic CLI on any machine.",
+  "main": "src/server.js",
+  "bin": {
+    "proxy-max": "src/launch.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "launch": "node src/launch.js",
+    "doctor": "node src/install.js",
+    "test:panel": "node src/panel_test.js"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
