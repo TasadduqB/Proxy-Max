@@ -72,7 +72,30 @@ function activeProviderConfig() {
 // ---- Model pool (round-robin + fallback) ----
 
 let poolRR = 0;
-const poolStats = new Map(); // `${provider}::${model}` → { req, err, lastMs }
+// `${provider}::${model}` → { req, err, lastMs, consecutiveFails, cooledUntil }
+const poolStats = new Map();
+
+// Cooldown durations:
+//   404 (model removed from provider) → 1 hour — won't come back on its own
+//   3+ consecutive non-404 failures  → 5 minutes — could be transient
+const COOLDOWN_404_MS  = 60 * 60 * 1000;
+const COOLDOWN_FAIL_MS = 5  * 60 * 1000;
+const COOLDOWN_FAIL_THRESHOLD = 3;
+
+function getOrInitStat(key) {
+  if (!poolStats.has(key)) {
+    poolStats.set(key, { req: 0, err: 0, lastMs: 0, consecutiveFails: 0, cooledUntil: 0 });
+  }
+  return poolStats.get(key);
+}
+
+function isCooledDown(stat) {
+  return stat.cooledUntil > 0 && Date.now() < stat.cooledUntil;
+}
+
+function cooldownRemaining(stat) {
+  return Math.max(0, Math.ceil((stat.cooledUntil - Date.now()) / 1000));
+}
 
 function getPool() {
   const raw = CONFIG.pool;
@@ -221,15 +244,32 @@ async function handleMessages(req, res) {
   };
   const reqStart = Date.now();
 
-  // Round-robin + fallback: try each pool member in order starting from poolRR.
+  // Round-robin + fallback with circuit breaker.
+  // Members in cooldown are skipped instantly (no upstream call).
   const startIdx = poolRR;
+  let tried = 0; // members actually called (not skipped)
+  let skipped = 0;
+
   for (let attempt = 0; attempt < pool.length; attempt++) {
     const idx = (startIdx + attempt) % pool.length;
     const cfg = pool[idx];
     const key = cfg._key;
-    if (!poolStats.has(key)) poolStats.set(key, { req: 0, err: 0, lastMs: 0 });
-    const stat = poolStats.get(key);
+    const stat = getOrInitStat(key);
 
+    // Circuit breaker: skip cooled-down members instantly.
+    if (isCooledDown(stat)) {
+      skipped++;
+      const secs = cooldownRemaining(stat);
+      console.log(`[proxy] [skip] ${cfg.label} in cooldown ${secs}s remaining`);
+      logEntry.attempts.push({
+        model: cfg.model, provider: cfg.kind, label: cfg.label,
+        status: 'skipped', durationMs: 0,
+        error: `circuit open — cooldown ${secs}s`
+      });
+      continue;
+    }
+
+    tried++;
     body.model = cfg.model;
     stat.req++;
     const t0 = Date.now();
@@ -249,11 +289,13 @@ async function handleMessages(req, res) {
       else await callOpenAICompatible(cfg, body, res);
       attemptLog.durationMs = Date.now() - t0;
       stat.lastMs = attemptLog.durationMs;
+      stat.consecutiveFails = 0;
+      stat.cooledUntil = 0;
       poolRR = (idx + 1) % pool.length;
       logEntry.attempts.push(attemptLog);
       logEntry.totalMs = Date.now() - reqStart;
       pushLog(logEntry);
-      console.log(`[proxy] [ok] ${cfg.label} model=${cfg.model} dur=${attemptLog.durationMs}ms stream=${body.stream}`);
+      console.log(`[proxy] [ok] ${cfg.label} dur=${attemptLog.durationMs}ms stream=${body.stream}`);
       return;
     } catch (err) {
       attemptLog.durationMs = Date.now() - t0;
@@ -261,6 +303,18 @@ async function handleMessages(req, res) {
       attemptLog.error = err.message.slice(0, 300);
       stat.err++;
       stat.lastMs = attemptLog.durationMs;
+      stat.consecutiveFails = (stat.consecutiveFails || 0) + 1;
+
+      // Circuit breaker: trip on 404 (dead model) or repeated failures.
+      const is404 = /Upstream 4[0-9]{2}/.test(err.message) && err.message.includes('404');
+      if (is404) {
+        stat.cooledUntil = Date.now() + COOLDOWN_404_MS;
+        console.warn(`[proxy] [breaker] ${cfg.label} → 404 (model gone), cooldown 1h`);
+      } else if (stat.consecutiveFails >= COOLDOWN_FAIL_THRESHOLD) {
+        stat.cooledUntil = Date.now() + COOLDOWN_FAIL_MS;
+        console.warn(`[proxy] [breaker] ${cfg.label} → ${stat.consecutiveFails} consecutive fails, cooldown 5m`);
+      }
+
       logEntry.attempts.push(attemptLog);
 
       if (res.headersSent) {
@@ -272,20 +326,31 @@ async function handleMessages(req, res) {
         return;
       }
 
-      if (attempt < pool.length - 1) {
-        console.warn(`[proxy] [fallback] ${cfg.label} failed (${err.message.slice(0, 120)}) → trying next`);
+      const remaining = pool.length - attempt - 1;
+      if (remaining > 0) {
+        console.warn(`[proxy] [fallback] ${cfg.label} failed → trying next (${remaining} left)`);
       } else {
-        logEntry.finalStatus = 'all-failed';
+        logEntry.finalStatus = tried > 0 ? 'all-failed' : 'all-skipped';
         logEntry.totalMs = Date.now() - reqStart;
         pushLog(logEntry);
-        const lastErr = err.message;
-        console.error(`[proxy] [all-failed] ${pool.length} member(s) exhausted. Last: ${lastErr}`);
-        send(res, 502, {
-          type: 'error',
-          error: { type: 'api_error', message: `All pool members failed. Last error: ${lastErr}` }
-        });
+        const msg = tried === 0
+          ? `All ${pool.length} pool members are in circuit-breaker cooldown. Try again later.`
+          : `All pool members failed. Last error: ${err.message}`;
+        console.error(`[proxy] [${logEntry.finalStatus}] ${msg}`);
+        send(res, 502, { type: 'error', error: { type: 'api_error', message: msg } });
       }
     }
+  }
+
+  // Edge case: every member was skipped (all in cooldown, none tried).
+  if (tried === 0 && skipped > 0) {
+    logEntry.finalStatus = 'all-skipped';
+    logEntry.totalMs = Date.now() - reqStart;
+    pushLog(logEntry);
+    send(res, 503, {
+      type: 'error',
+      error: { type: 'api_error', message: `All ${skipped} pool members are in circuit-breaker cooldown. Try again later.` }
+    });
   }
 }
 
@@ -570,10 +635,21 @@ function handleLaunchCommand(_req, res) {
 }
 
 function handlePoolGet(_req, res) {
-  const pool = (CONFIG.pool || []).map(e => ({
-    ...e,
-    stats: poolStats.get(`${e.provider}::${e.model}`) || { req: 0, err: 0, lastMs: 0 }
-  }));
+  const now = Date.now();
+  const pool = (CONFIG.pool || []).map(e => {
+    const stat = poolStats.get(`${e.provider}::${e.model}`) || { req: 0, err: 0, lastMs: 0, consecutiveFails: 0, cooledUntil: 0 };
+    return {
+      ...e,
+      stats: {
+        req: stat.req,
+        err: stat.err,
+        lastMs: stat.lastMs,
+        consecutiveFails: stat.consecutiveFails || 0,
+        cooledUntil: stat.cooledUntil || 0,
+        cooldownSecsLeft: stat.cooledUntil > now ? Math.ceil((stat.cooledUntil - now) / 1000) : 0
+      }
+    };
+  });
   send(res, 200, { pool, rrIndex: poolRR, size: pool.length });
 }
 
@@ -592,6 +668,14 @@ async function handlePoolPost(req, res) {
     .filter(e => e.provider && e.model);
   saveConfig(CONFIG);
   send(res, 200, { ok: true, pool: CONFIG.pool });
+}
+
+function handlePoolResetCircuits(_req, res) {
+  for (const stat of poolStats.values()) {
+    stat.consecutiveFails = 0;
+    stat.cooledUntil = 0;
+  }
+  send(res, 200, { ok: true });
 }
 
 function handleLogsGet(_req, res) {
@@ -637,6 +721,7 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/panel/reset' && req.method === 'POST') return handlePanelResetPost(req, res);
     if (u.pathname === '/api/pool' && req.method === 'GET') return handlePoolGet(req, res);
     if (u.pathname === '/api/pool' && req.method === 'POST') return await handlePoolPost(req, res);
+    if (u.pathname === '/api/pool/reset-circuits' && req.method === 'POST') return handlePoolResetCircuits(req, res);
     if (u.pathname === '/api/logs' && req.method === 'GET') return handleLogsGet(req, res);
     if (u.pathname === '/api/logs/clear' && req.method === 'POST') return handleLogsClear(req, res);
     if (u.pathname === '/api/health') {

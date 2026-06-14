@@ -270,6 +270,9 @@
   .pool-label { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .pool-model { font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:ui-monospace,Menlo,Consolas,monospace; }
   .pool-stat  { font-size:11px; color:var(--mute); white-space:nowrap; flex-shrink:0; }
+  .pool-row.cooled { opacity:.55; }
+  .pool-row.cooled .pool-label::after { content:' ⏸'; font-size:10px; color:var(--warn); }
+  .cooldown-badge { font-size:10px; color:var(--warn); background:rgba(255,181,71,.12); border:1px solid rgba(255,181,71,.25); border-radius:4px; padding:1px 5px; flex-shrink:0; }
   .btn-remove { background:none; border:none; color:var(--err); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; opacity:.7; }
   .btn-remove:hover { opacity:1; }
 
@@ -520,7 +523,10 @@
       </div>
 
       <div class="card">
-        <h3>Pool members</h3>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <h3 style="margin:0;flex:1">Pool members</h3>
+          <button class="btn secondary sm" onclick="resetCircuits()" title="Clear all circuit-breaker cooldowns so every model is tried again immediately">Reset circuits</button>
+        </div>
         <div id="poolList"><div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div></div>
       </div>
 
@@ -1288,16 +1294,21 @@ function renderPool(data) {
   }
   const provAbbr = { nvidia:'N', azure:'A', bedrock:'B' };
   list.innerHTML = pool.map((e, i) => {
-    const s = e.stats || { req:0, err:0, lastMs:0 };
+    const s = e.stats || { req:0, err:0, lastMs:0, cooldownSecsLeft:0 };
+    const cooled = (s.cooldownSecsLeft || 0) > 0;
     const errPct = s.req > 0 ? Math.round(s.err / s.req * 100) : 0;
     const statStr = `${s.req} req · ${s.err} err${s.req>0?' · '+s.lastMs+'ms':''}`;
-    return `<div class="pool-row">
+    const coolBadge = cooled
+      ? `<span class="cooldown-badge">⏸ ${s.cooldownSecsLeft >= 3600 ? Math.ceil(s.cooldownSecsLeft/60)+'m' : s.cooldownSecsLeft+'s'}</span>`
+      : '';
+    return `<div class="pool-row${cooled?' cooled':''}">
       <div class="pool-prov ${e.provider}">${provAbbr[e.provider]||'?'}</div>
       <div class="pool-info">
         <div class="pool-label">${escapeHtml(e.label || e.model)}</div>
         <div class="pool-model">${escapeHtml(e.model)}</div>
       </div>
-      <span class="pool-stat ${s.err>0&&errPct>0?'warn':''}">${escapeHtml(statStr)}</span>
+      ${coolBadge}
+      <span class="pool-stat ${s.err>0&&errPct>50?'warn':''}">${escapeHtml(statStr)}</span>
       <button class="btn-remove" data-pool-idx="${i}" title="Remove">×</button>
     </div>`;
   }).join('');
@@ -1401,6 +1412,14 @@ async function removeFromPool(idx) {
     const h = await fetch('/api/health').then(r=>r.json());
     setHealth(h);
   } catch {}
+}
+
+async function resetCircuits() {
+  try {
+    await fetch('/api/pool/reset-circuits', { method: 'POST' });
+    toast('Circuit breakers reset — all models active');
+    await loadPool();
+  } catch (e) { toast(e.message, false); }
 }
 
 // ── Request Log ──
