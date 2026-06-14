@@ -1,0 +1,1509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Proxy-Max</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg:#070910; --bg2:#0c0f17;
+    --panel:#10131c; --panel2:#161a25; --panel3:#1c2230;
+    --line:#222837; --line2:#2c3346;
+    --text:#e8eaf2; --mute:#8993ab; --dim:#5a6378;
+    --accent:#7aa2ff; --accent2:#b988ff; --accent3:#5ee0c1;
+    --ok:#3ddc97; --warn:#ffb547; --err:#ff6b6b;
+    --bedrock:#ff9900; --azure:#0078d4; --nvidia:#76b900;
+  }
+  * { box-sizing: border-box; }
+  html,body {
+    margin:0; padding:0;
+    background:
+      radial-gradient(1100px 700px at 12% -10%, rgba(122,162,255,.10), transparent 60%),
+      radial-gradient(900px 600px at 100% 0%, rgba(185,136,255,.08), transparent 55%),
+      var(--bg);
+    color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    min-height:100vh;
+  }
+  a { color:var(--accent); text-decoration:none; }
+  button { font:inherit; }
+
+  /* ── Layout ── */
+  .app { display:grid; grid-template-columns: 230px 1fr; min-height:100vh; }
+  aside {
+    border-right:1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 100%);
+    padding: 16px 12px;
+    position: sticky; top:0; height:100vh; overflow:auto;
+    display:flex; flex-direction:column;
+  }
+
+  /* ── Brand ── */
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 4px 16px; border-bottom:1px solid var(--line); margin-bottom:12px; }
+  .brand .logo {
+    width:32px; height:32px; border-radius:8px; flex-shrink:0;
+    background: conic-gradient(from 220deg at 50% 50%, var(--accent), var(--accent2), var(--accent3), var(--accent));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:15px; color:#0a0c12;
+    box-shadow: 0 6px 18px rgba(122,162,255,.22);
+  }
+  .brand .name { font-weight:700; font-size:14px; letter-spacing:.2px; line-height:1.2; }
+  .brand .ver  { color:var(--dim); font-size:10.5px; }
+
+  /* ── Nav ── */
+  nav { display:flex; flex-direction:column; gap:2px; flex:1; }
+  .nav-section { color:var(--dim); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; padding:12px 8px 5px; }
+  .navitem {
+    display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px;
+    color:var(--mute); cursor:pointer; user-select:none; font-size:13.5px; font-weight:500;
+    border:1px solid transparent; transition:.12s;
+  }
+  .navitem:hover { color:var(--text); background:rgba(255,255,255,.04); }
+  .navitem.active { color:var(--text); background:var(--panel2); border-color:var(--line2); }
+  .navitem .ic { width:16px; height:16px; flex-shrink:0; opacity:.8; }
+  .navitem.active .ic { opacity:1; }
+
+  /* ── Side footer ── */
+  .side-foot { padding-top:10px; border-top:1px solid var(--line); }
+  .health {
+    display:flex; align-items:center; gap:9px; padding:9px 10px;
+    border:1px solid var(--line); border-radius:10px; background:var(--panel);
+  }
+  .health .dot { width:8px; height:8px; border-radius:50%; background:var(--mute); flex-shrink:0; transition:.3s; }
+  .health.ok   .dot { background:var(--ok);   box-shadow: 0 0 0 3px rgba(61,220,151,.18); }
+  .health.warn .dot { background:var(--warn);  box-shadow: 0 0 0 3px rgba(255,181,71,.18); }
+  .health .info { display:flex; flex-direction:column; line-height:1.25; min-width:0; }
+  .health .label { font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.1em; }
+  .health .value { font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ── Main ── */
+  main { padding: 24px clamp(16px, 3.5vw, 40px) 80px; max-width: 1080px; }
+  h1 { font-size:20px; font-weight:700; margin:0 0 3px; letter-spacing:.1px; }
+  .sub { color:var(--mute); font-size:13px; margin-bottom:16px; line-height:1.5; }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:14px; }
+  .topbar .pills { display:flex; gap:6px; flex-wrap:wrap; padding-top:4px; }
+
+  /* ── Pills ── */
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:var(--panel); border:1px solid var(--line); color:var(--mute); font-size:11.5px; }
+  .pill .dot { width:6px; height:6px; border-radius:50%; background:var(--mute); }
+  .pill.ok   { color:var(--text); } .pill.ok   .dot { background:var(--ok);   }
+  .pill.warn { color:var(--text); } .pill.warn .dot { background:var(--warn);  }
+  .pill.err  { color:var(--text); } .pill.err  .dot { background:var(--err);   }
+
+  /* ── Cards ── */
+  .card {
+    background: linear-gradient(160deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 50%), var(--panel);
+    border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:14px;
+    transition: border-color .15s;
+  }
+  .card:focus-within { border-color: var(--line2); }
+  .card h3 { margin:0 0 12px; font-size:13.5px; font-weight:600; letter-spacing:.15px; display:flex; align-items:center; gap:8px; }
+  .card h3 .badge {
+    font-size:10px; padding:2px 7px; border-radius:999px;
+    background:var(--panel3); color:var(--mute); border:1px solid var(--line2);
+    letter-spacing:.06em; text-transform:uppercase; font-weight:500;
+  }
+  .card h3 .badge.ok   { background:rgba(61,220,151,.12);  color:var(--ok);   border-color:rgba(61,220,151,.3); }
+  .card h3 .badge.warn { background:rgba(255,181,71,.12);  color:var(--warn); border-color:rgba(255,181,71,.3); }
+  .card h3 .badge.err  { background:rgba(255,107,107,.12); color:var(--err);  border-color:rgba(255,107,107,.3); }
+
+  /* ── Provider source cards ── */
+  .src-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+  .src {
+    background:var(--panel2); border:1px solid var(--line); border-radius:11px;
+    padding:14px 16px; cursor:pointer; transition:.15s; user-select:none; position:relative; overflow:hidden;
+  }
+  .src::before {
+    content:""; position:absolute; top:0; left:0; right:0; height:2px; opacity:0; transition:.15s;
+    background: var(--src-accent, var(--accent));
+    border-radius:11px 11px 0 0;
+  }
+  .src:hover { border-color:var(--line2); transform:translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  .src:hover::before { opacity:.7; }
+  .src.active { border-color: var(--src-accent, var(--accent)); box-shadow: 0 0 0 1px var(--src-accent, var(--accent)) inset; }
+  .src.active::before { opacity:1; }
+  .src[data-p="bedrock"] { --src-accent: var(--bedrock); }
+  .src[data-p="azure"]   { --src-accent: var(--azure); }
+  .src[data-p="nvidia"]  { --src-accent: var(--nvidia); }
+  .src .name { font-weight:600; font-size:13.5px; display:flex; align-items:center; gap:7px; }
+  .src .name .dot { width:7px; height:7px; border-radius:50%; background:var(--src-accent, var(--accent)); }
+  .src .desc { color:var(--mute); font-size:12px; margin-top:5px; line-height:1.45; }
+
+  /* ── Forms ── */
+  label { display:block; font-size:11px; color:var(--mute); margin:12px 0 5px; letter-spacing:.08em; text-transform:uppercase; font-weight:500; }
+  input, select, textarea {
+    width:100%; background:var(--panel2); color:var(--text);
+    border:1px solid var(--line); border-radius:8px; padding:9px 11px; font:inherit; outline:none;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  input:focus, select:focus, textarea:focus { border-color:var(--accent); box-shadow: 0 0 0 3px rgba(122,162,255,.12); }
+  select optgroup { color:var(--mute); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+
+  /* ── Buttons ── */
+  .btn {
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--accent); color:#0b0d12; border:0; border-radius:8px;
+    padding:9px 15px; font-weight:600; font-size:13.5px; cursor:pointer; transition:.12s;
+    white-space:nowrap;
+  }
+  .btn:hover { filter:brightness(1.08); }
+  .btn.secondary { background:transparent; color:var(--text); border:1px solid var(--line2); }
+  .btn.secondary:hover { background:var(--panel2); border-color:var(--accent); }
+  .btn.ghost { background:transparent; color:var(--mute); border:1px dashed var(--line); }
+  .btn.ghost:hover { color:var(--text); }
+  .btn.danger { background:rgba(255,107,107,.1); color:var(--err); border:1px solid rgba(255,107,107,.3); }
+  .btn.danger:hover { background:rgba(255,107,107,.18); }
+  .btn.sm { padding:6px 11px; font-size:12.5px; border-radius:7px; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; filter:none; }
+  .actions { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; align-items:center; }
+
+  /* ── Key-value rows ── */
+  .kv { display:grid; grid-template-columns: 140px 1fr; gap:5px 12px; font-size:13px; align-items:start; }
+  .kv .k { color:var(--mute); font-size:11.5px; letter-spacing:.04em; padding-top:1px; }
+  .kv .v { font-family: ui-monospace,"SF Mono",Menlo,Consolas,monospace; word-break: break-all; }
+  .kv .v.ok  { color:var(--ok);  }
+  .kv .v.bad { color:var(--err); }
+
+  /* ── Check rows (component list) ── */
+  .check {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:11px 13px; border:1px solid var(--line); border-radius:10px;
+    background:var(--panel2); margin-bottom:7px; transition:.12s;
+  }
+  .check .left { display:flex; align-items:center; gap:11px; min-width:0; flex:1; }
+  .check .ic {
+    width:30px; height:30px; border-radius:8px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--panel3); border:1px solid var(--line2); font-weight:700; font-size:12px; color:var(--mute);
+  }
+  .check .meta { min-width:0; }
+  .check .title { font-weight:600; font-size:13.5px; }
+  .check .path { color:var(--mute); font-size:11.5px; font-family: ui-monospace,Menlo,Consolas,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:500px; }
+  .check.ok  .ic { color:var(--ok);  border-color: rgba(61,220,151,.35);  background: rgba(61,220,151,.08); }
+  .check.bad .ic { color:var(--err); border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.08); }
+
+  /* ── Code blocks ── */
+  .cmd-wrap { position:relative; }
+  pre.cmd {
+    background:#04060b; border:1px solid var(--line); border-radius:10px;
+    padding:13px 14px; padding-right:80px; overflow:auto; margin:0;
+    font-size:12.5px; color:#cfd5e3; font-family: ui-monospace,Menlo,Consolas,monospace;
+    line-height:1.6; white-space:pre;
+  }
+  .copy-btn {
+    position:absolute; top:9px; right:9px;
+    background:var(--panel3); border:1px solid var(--line2); color:var(--mute);
+    border-radius:6px; padding:4px 9px; font-size:11px; cursor:pointer; transition:.12s;
+    display:flex; align-items:center; gap:4px; font-family:inherit;
+  }
+  .copy-btn:hover { color:var(--text); border-color:var(--accent); background:var(--panel2); }
+  .copy-btn.copied { color:var(--ok); border-color:rgba(61,220,151,.4); }
+
+  /* ── Console / log ── */
+  .console {
+    background:#04060b; border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; font-family: ui-monospace,Menlo,Consolas,monospace; font-size:12.5px;
+    height:230px; overflow:auto; white-space:pre-wrap; color:#cfd5e3; line-height:1.5;
+  }
+  .console .warn { color:#ffb547; }
+
+  /* ── Misc ── */
+  details summary { cursor:pointer; color:var(--mute); padding:4px 0; user-select:none; }
+  details[open] summary { color:var(--text); }
+  .toast {
+    position:fixed; right:18px; bottom:18px; background:#1a1f2c;
+    border:1px solid var(--line2); padding:9px 14px; border-radius:10px;
+    opacity:0; transform:translateY(8px); transition:.18s; z-index:50; font-size:13.5px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .small { font-size:12px; color:var(--mute); }
+  .ok   { color:var(--ok);   }
+  .err  { color:var(--err);  }
+  .warn { color:var(--warn); }
+  hr { border:0; border-top:1px solid var(--line); margin:14px 0; }
+  .hide { display:none !important; }
+  .view { display:none; }
+  .view.active { display:block; }
+  .view.active > * { animation: pop .2s ease both; }
+  @keyframes pop { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+
+  /* ── Tabs ── */
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+  .tab {
+    padding:7px 14px; font-size:13px; font-weight:500; cursor:pointer;
+    color:var(--mute); border-bottom:2px solid transparent; margin-bottom:-1px; transition:.12s;
+  }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tabpanel { display:none; }
+  .tabpanel.active { display:block; }
+
+  /* ── Launch status strip ── */
+  .launch-strip {
+    display:flex; align-items:center; gap:10px; padding:10px 13px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel2);
+    margin-bottom:12px; font-size:13px;
+  }
+  .launch-strip .ic { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .launch-strip.ok   { border-color:rgba(61,220,151,.3);  background:rgba(61,220,151,.06);  }
+  .launch-strip.ok   .ic { background:rgba(61,220,151,.15); color:var(--ok);  }
+  .launch-strip.warn { border-color:rgba(255,181,71,.3);  background:rgba(255,181,71,.06);  }
+  .launch-strip.warn .ic { background:rgba(255,181,71,.15); color:var(--warn); }
+
+  /* ── Pool ── */
+  .pool-row {
+    display:flex; align-items:center; gap:10px; padding:9px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .pool-row:last-child { border-bottom:0; }
+  .pool-prov {
+    width:22px; height:22px; border-radius:5px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:800; color:#fff;
+  }
+  .pool-prov.bedrock { background:var(--bedrock); }
+  .pool-prov.azure   { background:var(--azure);   }
+  .pool-prov.nvidia  { background:var(--nvidia);  }
+  .pool-info { flex:1; min-width:0; }
+  .pool-label { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pool-model { font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .pool-stat  { font-size:11px; color:var(--mute); white-space:nowrap; flex-shrink:0; }
+  .pool-row.cooled { opacity:.55; }
+  .pool-row.cooled .pool-label::after { content:' ⏸'; font-size:10px; color:var(--warn); }
+  .cooldown-badge { font-size:10px; color:var(--warn); background:rgba(255,181,71,.12); border:1px solid rgba(255,181,71,.25); border-radius:4px; padding:1px 5px; flex-shrink:0; }
+  .btn-remove { background:none; border:none; color:var(--err); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; opacity:.7; }
+  .btn-remove:hover { opacity:1; }
+
+  @media (max-width:860px) {
+    .app { grid-template-columns: 1fr; }
+    aside { position:relative; height:auto; border-right:0; border-bottom:1px solid var(--line); }
+    .src-grid { grid-template-columns:1fr; }
+    .grid2 { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <div class="logo">P</div>
+      <div>
+        <div class="name">Proxy-Max</div>
+        <div class="ver">Anthropic-compatible router</div>
+      </div>
+    </div>
+
+    <nav>
+      <div class="nav-section">Configure</div>
+      <div class="navitem active" data-view="provider">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Provider
+      </div>
+      <div class="navitem" data-view="pool">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Model Pool
+      </div>
+      <div class="navitem" data-view="models">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6"/><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+        Model Catalog
+      </div>
+      <div class="navitem" data-view="launch">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+        Launch CLI
+      </div>
+      <div class="nav-section">Manage</div>
+      <div class="navitem" data-view="system">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.41 13.74M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        System
+      </div>
+      <div class="navitem" data-view="logs">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h5"/></svg>
+        Diagnostics
+      </div>
+    </nav>
+
+    <div class="side-foot">
+      <div class="health" id="health">
+        <span class="dot"></span>
+        <div class="info">
+          <span class="label">Active proxy</span>
+          <span class="value" id="healthValue">checking…</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+
+    <!-- ══ PROVIDER VIEW ══ -->
+    <section class="view active" data-view="provider">
+      <div class="topbar">
+        <div>
+          <h1>Provider</h1>
+          <div class="sub">Pick a source, choose a model, paste your keys, and launch.</div>
+        </div>
+        <div class="pills">
+          <span class="pill" id="cfgPathPill">config: —</span>
+        </div>
+      </div>
+
+      <!-- Step 1 – Source -->
+      <div class="card">
+        <h3>1. Source <span class="badge" id="srcBadge">choose one</span></h3>
+        <div class="src-grid">
+          <div class="src" data-p="bedrock">
+            <div class="name"><span class="dot"></span>AWS Bedrock</div>
+            <div class="desc">Claude on Bedrock — Anthropic-native payload with SigV4 signing.</div>
+          </div>
+          <div class="src" data-p="azure">
+            <div class="name"><span class="dot"></span>Azure AI Foundry</div>
+            <div class="desc">GPT-4.1, Phi-4, Llama 4, Mistral, DeepSeek, Grok &amp; more.</div>
+          </div>
+          <div class="src" data-p="nvidia">
+            <div class="name"><span class="dot"></span>NVIDIA NIM</div>
+            <div class="desc">build.nvidia.com — DeepSeek V4, Nemotron 3, Kimi K2.6, Qwen 3.5, GLM 5.1…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 – Model & credentials -->
+      <div class="card hide" id="formCard">
+        <h3>2. Model &amp; credentials <span class="badge" id="provBadge"></span></h3>
+
+        <label>Model</label>
+        <div class="row">
+          <select id="modelSelect" style="flex:2; min-width:240px"></select>
+          <input id="modelCustom" placeholder="…or paste a custom model id" style="flex:3" />
+        </div>
+
+        <div id="azureFields" class="hide">
+          <div class="grid2">
+            <div>
+              <label>Endpoint <span class="small">(base URL or full path)</span></label>
+              <input id="az_endpoint" placeholder="https://my-foundry.openai.azure.com" />
+            </div>
+            <div>
+              <label>API key</label>
+              <input id="az_apiKey" type="password" placeholder="••••••••" />
+            </div>
+          </div>
+          <div class="grid2">
+            <div>
+              <label>Deployment name <span class="small">(blank for direct Foundry inference)</span></label>
+              <input id="az_deployment" placeholder="my-gpt4o-deploy" />
+            </div>
+            <div>
+              <label>API version</label>
+              <input id="az_apiVersion" placeholder="2024-10-21" />
+            </div>
+          </div>
+        </div>
+
+        <div id="nvidiaFields" class="hide">
+          <div class="grid2">
+            <div>
+              <label>Endpoint <span class="small">(paste a build.nvidia.com model URL or leave default)</span></label>
+              <input id="nv_endpoint" placeholder="https://integrate.api.nvidia.com/v1" />
+            </div>
+            <div>
+              <label>API key</label>
+              <input id="nv_apiKey" type="password" placeholder="nvapi-..." />
+            </div>
+          </div>
+          <div class="small" style="margin-top:6px">Tip: paste any <a href="https://build.nvidia.com/models" target="_blank" rel="noopener">build.nvidia.com/models</a> page URL — the model ID is auto-extracted.</div>
+        </div>
+
+        <div id="bedrockFields" class="hide">
+          <div class="grid2">
+            <div>
+              <label>AWS region</label>
+              <input id="br_region" placeholder="us-east-1" />
+            </div>
+            <div>
+              <label>Endpoint <span class="small">(optional)</span></label>
+              <input id="br_endpoint" placeholder="https://bedrock-runtime.us-east-1.amazonaws.com" />
+            </div>
+          </div>
+          <div class="grid2">
+            <div>
+              <label>AWS access key ID</label>
+              <input id="br_access" />
+            </div>
+            <div>
+              <label>AWS secret access key</label>
+              <input id="br_secret" type="password" placeholder="••••••••" />
+            </div>
+          </div>
+          <label>Session token <span class="small">(optional — for STS / SSO)</span></label>
+          <input id="br_token" type="password" placeholder="" />
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="saveBtn">Save &amp; activate</button>
+          <button class="btn secondary" id="testBtn">Test connection</button>
+          <span id="testResult" class="small"></span>
+        </div>
+      </div>
+
+      <!-- Step 3 – Rate limits -->
+      <div class="card" id="limitsCard">
+        <h3>3. Rate limits <span class="badge" id="limitsBadge">per 60 s</span></h3>
+        <div class="sub">Throttle requests before they reach the upstream. Set 0 to disable a limit.</div>
+        <div class="grid2">
+          <div>
+            <label>Tokens per minute (TPM)</label>
+            <input id="lim_tpm" type="number" min="0" step="1000" placeholder="1000000" />
+          </div>
+          <div>
+            <label>Requests per minute (RPM)</label>
+            <input id="lim_rpm" type="number" min="0" step="100" placeholder="10000" />
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer">
+          <input id="lim_enabled" type="checkbox" style="width:auto" /> Enforce these limits
+        </label>
+        <div class="actions">
+          <button class="btn" id="limitsSaveBtn">Save limits</button>
+          <span id="limitsResult" class="small"></span>
+        </div>
+        <div class="small" id="limitsUsage" style="margin-top:6px;color:var(--dim)"></div>
+      </div>
+
+      <!-- Step 4 – Launch -->
+      <div class="card" id="launchCard">
+        <h3>4. Launch <span class="badge" id="launchBadge">—</span></h3>
+
+        <div id="launchNoConfig" class="hide">
+          <div class="small warn">↑ Configure a provider and save it first.</div>
+        </div>
+
+        <div id="launchNoClaude" class="hide">
+          <div class="launch-strip warn">
+            <div class="ic">⚠</div>
+            <div>
+              <div style="font-weight:600">Anthropic CLI not installed</div>
+              <div class="small">Go to <span class="link-btn" onclick="navTo('system')">System page</span> to install it automatically.</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="launchReady" class="hide">
+          <div class="launch-strip ok" id="launchStrip">
+            <div class="ic">✓</div>
+            <div style="min-width:0">
+              <div style="font-weight:600">Claude CLI detected</div>
+              <div class="small" id="launchClaudePath" style="font-family:ui-monospace,Menlo,Consolas,monospace"></div>
+            </div>
+          </div>
+          <div class="small" style="margin-bottom:8px">Paste into any terminal — paths are resolved for <strong id="launchPlatformLabel">your system</strong>:</div>
+          <div class="cmd-wrap">
+            <pre class="cmd" id="launchCmdPrimary"></pre>
+            <button class="copy-btn" data-copy-target="launchCmdPrimary">⎘ Copy</button>
+          </div>
+          <div class="actions">
+            <button class="btn secondary sm" onclick="navTo('launch')">All shell variants →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ POOL VIEW ══ -->
+    <section class="view" data-view="pool">
+      <div class="topbar">
+        <div>
+          <h1>Model Pool</h1>
+          <div class="sub">Wire up multiple models across any provider. Requests round-robin across all members with automatic fallback on failure.</div>
+        </div>
+        <div class="pills" id="poolPills">
+          <span class="pill" id="poolSizePill"><span class="dot"></span>0 models</span>
+          <span class="pill" id="poolRRPill">rr: 0</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <h3 style="margin:0;flex:1">Pool members</h3>
+          <button class="btn secondary sm" onclick="resetCircuits()" title="Clear all circuit-breaker cooldowns so every model is tried again immediately">Reset circuits</button>
+        </div>
+        <div id="poolList"><div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div></div>
+      </div>
+
+      <div class="card">
+        <h3>Add model to pool</h3>
+        <div class="small" style="margin-bottom:12px;color:var(--mute)">
+          Each pool entry uses the credentials saved for that provider on the
+          <span class="link-btn" onclick="navTo('provider')" style="color:var(--accent);cursor:pointer">Provider page</span>.
+          Configure credentials there first, then add as many models as you like here.
+        </div>
+
+        <!-- Credential status for selected provider -->
+        <div id="poolCredStatus" style="margin-bottom:12px;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);font-size:12.5px"></div>
+
+        <div class="grid2">
+          <div>
+            <label>Provider</label>
+            <select id="poolProvider" onchange="poolProviderChanged()">
+              <option value="nvidia">NVIDIA NIM</option>
+              <option value="azure">Azure AI Foundry</option>
+              <option value="bedrock">AWS Bedrock</option>
+            </select>
+          </div>
+          <div>
+            <label>Model ID</label>
+            <input id="poolModel" list="poolModelList" placeholder="e.g. nvidia/llama-3.1-nemotron-ultra-253b-v1" />
+            <datalist id="poolModelList"></datalist>
+          </div>
+        </div>
+        <label style="margin-top:10px">Label <span class="small">(optional — shown in logs)</span></label>
+        <input id="poolLabel" placeholder="e.g. Nemotron Ultra" />
+
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;font-size:12.5px;color:var(--dim);user-select:none">Override credentials for this entry <span class="small">(leave blank to use Provider page settings)</span></summary>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+            <div>
+              <label style="margin-bottom:4px">Endpoint URL <span class="small">(override)</span></label>
+              <input id="poolEntryEndpoint" placeholder="e.g. https://…/openai/responses?api-version=2025-04-01-preview" />
+            </div>
+            <div>
+              <label style="margin-bottom:4px">API Key <span class="small">(override)</span></label>
+              <input id="poolEntryApiKey" type="password" placeholder="leave blank to use saved key" />
+            </div>
+          </div>
+        </details>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn" onclick="addToPool()" id="poolAddBtn">Add to pool</button>
+          <button class="btn secondary" onclick="navTo('provider')" style="gap:6px">Configure credentials →</button>
+          <span id="poolAddResult" class="small"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ MODELS VIEW ══ -->
+    <section class="view" data-view="models">
+      <div class="topbar">
+        <div>
+          <h1>Model Catalog</h1>
+          <div class="sub">Browse all supported models. Click <strong>Use</strong> to pre-fill the Provider form.</div>
+        </div>
+        <div class="pills">
+          <input id="modelSearch" placeholder="filter…" style="max-width:220px;height:30px;padding:5px 10px;border-radius:999px"/>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Catalog</h3>
+        <div id="modelsBrowser"></div>
+      </div>
+    </section>
+
+    <!-- ══ LAUNCH CLI VIEW ══ -->
+    <section class="view" data-view="launch">
+      <div class="topbar">
+        <div>
+          <h1>Launch CLI</h1>
+          <div class="sub">Commands to point the official <code>claude</code> CLI at this proxy. Paths are resolved from the running server.</div>
+        </div>
+        <div class="pills">
+          <span class="pill" id="launchPlatformPill">platform: —</span>
+        </div>
+      </div>
+
+      <div class="card" id="launchCliStatus">
+        <h3>Status</h3>
+        <div id="launchCliStatusBody" class="kv"></div>
+      </div>
+
+      <div class="card">
+        <div class="tabs" id="shellTabs">
+          <div class="tab active" data-shell="unix">macOS / Linux (bash/zsh)</div>
+          <div class="tab" data-shell="ps">Windows (PowerShell)</div>
+          <div class="tab" data-shell="wincmd">Windows (cmd.exe)</div>
+          <div class="tab" data-shell="boot">One-shot bootstrap</div>
+        </div>
+        <div class="tabpanel active" id="sp-unix">
+          <div class="cmd-wrap">
+            <pre class="cmd" id="cmdUnix"></pre>
+            <button class="copy-btn" data-copy-target="cmdUnix">⎘ Copy</button>
+          </div>
+        </div>
+        <div class="tabpanel" id="sp-ps">
+          <div class="cmd-wrap">
+            <pre class="cmd" id="cmdWin"></pre>
+            <button class="copy-btn" data-copy-target="cmdWin">⎘ Copy</button>
+          </div>
+        </div>
+        <div class="tabpanel" id="sp-wincmd">
+          <div class="cmd-wrap">
+            <pre class="cmd" id="cmdWinCmd"></pre>
+            <button class="copy-btn" data-copy-target="cmdWinCmd">⎘ Copy</button>
+          </div>
+        </div>
+        <div class="tabpanel" id="sp-boot">
+          <div class="cmd-wrap">
+            <pre class="cmd" id="cmdBoot"></pre>
+            <button class="copy-btn" data-copy-target="cmdBoot">⎘ Copy</button>
+          </div>
+          <div class="small" style="margin-top:8px">The bootstrap script installs Node, npm, and the Anthropic CLI (admin or per-user), starts this proxy, then execs <code>claude</code>.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>VS Code integrated terminal</h3>
+        <div class="small" style="margin-bottom:10px">Open the VS Code terminal (<kbd>Ctrl+`</kbd> or <kbd>⌃`</kbd>) and paste the command for your shell above. The proxy must be running first.</div>
+        <div class="kv" style="margin-top:6px">
+          <span class="k">Proxy address</span><span class="v" id="launchBase">—</span>
+          <span class="k">Auth token</span><span class="v">proxy-max (any non-empty value)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SYSTEM VIEW ══ -->
+    <section class="view" data-view="system">
+      <div class="topbar">
+        <div>
+          <h1>System</h1>
+          <div class="sub">Detect runtime, admin rights, the Anthropic CLI, and install anything missing.</div>
+        </div>
+        <div class="pills">
+          <button class="btn secondary sm" id="refreshSys">Re-detect</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Runtime <span class="badge" id="osBadge">—</span></h3>
+        <div class="kv" id="sysKv"></div>
+      </div>
+
+      <div class="card">
+        <h3>Components</h3>
+        <div id="checks"></div>
+        <div class="actions">
+          <button class="btn" id="installAll">Install missing</button>
+          <button class="btn secondary" id="installClaude">Install Anthropic CLI</button>
+          <button class="btn secondary" id="installNode">Install Node + npm</button>
+          <span class="small" id="installHint"></span>
+        </div>
+        <div class="small" style="margin-top:10px;color:var(--dim)">
+          When admin rights aren't available, installs fall back to a per-user prefix (no <code>sudo</code> / no UAC) and a portable Node tarball.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Install console</h3>
+        <div class="console" id="installConsole">Idle.</div>
+      </div>
+
+      <div class="card">
+        <h3>Search PATH</h3>
+        <details>
+          <summary>PATH directories (<span id="pathCount">0</span>)</summary>
+          <pre class="cmd" style="margin-top:8px" id="pathList"></pre>
+        </details>
+      </div>
+    </section>
+
+    <!-- ══ DIAGNOSTICS VIEW ══ -->
+    <section class="view" data-view="logs">
+      <div class="topbar">
+        <div>
+          <h1>Diagnostics</h1>
+          <div class="sub">Request log and panel event testing.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <h3 style="margin:0;flex:1">Request Log</h3>
+          <span id="logCount" class="small" style="color:var(--dim)"></span>
+          <button class="btn secondary sm" onclick="loadLogs()">Refresh</button>
+          <a class="btn secondary sm" href="/api/logs/file?lines=2000" target="_blank" download="requests.log">Download</a>
+          <button class="btn danger sm" onclick="clearLogs()">Clear</button>
+        </div>
+        <div id="logFilePath" style="font-size:11px;color:var(--dim);font-family:ui-monospace,Menlo,Consolas,monospace;margin-bottom:10px;word-break:break-all"></div>
+        <div id="logTable" style="overflow-x:auto">
+          <div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Panel Event Test</h3>
+        <div class="actions" style="margin-top:0">
+          <button class="btn secondary sm" id="panelRefresh">Refresh</button>
+          <button class="btn sm" id="panelImpression">Send impression</button>
+          <button class="btn sm" id="panelClick">Send click</button>
+          <button class="btn danger sm" id="panelReset">Reset</button>
+        </div>
+        <div class="kv" style="margin-top:12px" id="panelSummary"></div>
+        <details style="margin-top:10px" open>
+          <summary>Latest events</summary>
+          <div class="cmd-wrap" style="margin-top:8px">
+            <pre class="cmd" id="panelEvents" style="padding-right:14px">(empty)</pre>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h3>API endpoints</h3>
+        <div class="kv">
+          <span class="k">Health</span><span class="v"><a href="/api/health" target="_blank">/api/health</a></span>
+          <span class="k">System</span><span class="v"><a href="/api/system" target="_blank">/api/system</a></span>
+          <span class="k">Models</span><span class="v"><a href="/api/models" target="_blank">/api/models</a></span>
+          <span class="k">Config</span><span class="v"><a href="/api/config" target="_blank">/api/config</a> <span class="small">(secrets masked)</span></span>
+          <span class="k">Launch cmd</span><span class="v"><a href="/api/launch/command" target="_blank">/api/launch/command</a></span>
+          <span class="k">Panel event</span><span class="v">POST <a href="/api/panel/event" target="_blank">/api/panel/event</a></span>
+          <span class="k">Panel summary</span><span class="v"><a href="/api/panel/summary" target="_blank">/api/panel/summary</a></span>
+          <span class="k">Request logs</span><span class="v"><a href="/api/logs" target="_blank">/api/logs</a></span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<style>
+  .link-btn { color:var(--accent); cursor:pointer; text-decoration:underline; }
+  kbd { background:var(--panel3); border:1px solid var(--line2); border-radius:4px; padding:1px 5px; font-size:11.5px; font-family:inherit; }
+</style>
+
+<script>
+const $ = sel => document.querySelector(sel);
+const state = { provider:null, models:{}, config:{providers:{}}, system:null, launchInfo:null };
+
+// ── Toast ──
+function toast(msg, ok=true) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.style.color = ok ? '' : 'var(--err)';
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── Routing ──
+let _poolTimer = null;
+function navTo(view) {
+  for (const el of document.querySelectorAll('.navitem')) el.classList.toggle('active', el.dataset.view === view);
+  for (const el of document.querySelectorAll('.view'))    el.classList.toggle('active', el.dataset.view === view);
+  if (view === 'system') refreshSystem();
+  if (view === 'models') renderModelsBrowser();
+  if (view === 'logs')   { loadLogs(); refreshPanelTest(); }
+  if (view === 'launch') renderLaunchPage();
+  if (view === 'pool') {
+    loadPool();
+    if (!_poolTimer) _poolTimer = setInterval(loadPool, 5000);
+  } else {
+    clearInterval(_poolTimer); _poolTimer = null;
+  }
+}
+document.addEventListener('click', e => {
+  const ni = e.target.closest('.navitem'); if (ni) navTo(ni.dataset.view);
+  const src = e.target.closest('.src');    if (src) selectProvider(src.dataset.p);
+  const tab = e.target.closest('.tab[data-shell]'); if (tab) switchShellTab(tab.dataset.shell);
+});
+
+// ── Copy buttons ──
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.copy-btn[data-copy-target]');
+  if (!btn) return;
+  const pre = document.getElementById(btn.dataset.copyTarget);
+  if (!pre) return;
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    btn.classList.add('copied');
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = '⎘ Copy'; }, 1800);
+  }).catch(() => toast('Copy failed — select and copy manually', false));
+});
+
+// ── Shell tabs ──
+function switchShellTab(shell) {
+  for (const t of document.querySelectorAll('#shellTabs .tab')) t.classList.toggle('active', t.dataset.shell === shell);
+  for (const p of document.querySelectorAll('.tabpanel')) p.classList.toggle('active', p.id === `sp-${shell}`);
+}
+
+// ── Bootstrap ──
+async function loadAll() {
+  const [m, c, h, l] = await Promise.all([
+    fetch('/api/models').then(r=>r.json()),
+    fetch('/api/config').then(r=>r.json()),
+    fetch('/api/health').then(r=>r.json()),
+    fetch('/api/limits').then(r=>r.json()).catch(()=>null)
+  ]);
+  state.models = m;
+  state.config = c;
+  $('#cfgPathPill').textContent = 'config: ' + (c.configPath || '—');
+  setHealth(h);
+  if (l) applyLimits(l);
+  if (c.provider) selectProvider(c.provider);
+  poolProviderChanged(); // pre-populate datalist for pool form
+  await loadLaunchInfo();
+}
+
+// ── Launch info ──
+async function loadLaunchInfo() {
+  try {
+    const info = await fetch('/api/launch/command').then(r=>r.json());
+    state.launchInfo = info;
+    renderLaunchCard();
+    renderLaunchPage();
+  } catch {}
+}
+
+function renderLaunchCard() {
+  const info = state.launchInfo;
+  if (!info) return;
+
+  const isConfigured = !!(state.config.provider && (state.config.providers[state.config.provider] || {}).model);
+  const badgeEl = $('#launchBadge');
+
+  if (!isConfigured) {
+    $('#launchNoConfig').classList.remove('hide');
+    $('#launchNoClaude').classList.add('hide');
+    $('#launchReady').classList.add('hide');
+    badgeEl.textContent = 'configure first';
+    badgeEl.className = 'badge warn';
+    return;
+  }
+  $('#launchNoConfig').classList.add('hide');
+
+  if (!info.claudeInstalled) {
+    $('#launchNoClaude').classList.remove('hide');
+    $('#launchReady').classList.add('hide');
+    badgeEl.textContent = 'claude not installed';
+    badgeEl.className = 'badge err';
+    return;
+  }
+  $('#launchNoClaude').classList.add('hide');
+  $('#launchReady').classList.remove('hide');
+
+  const platform = info.platform;
+  const platformLabel = { darwin:'macOS', linux:'Linux', win32:'Windows' }[platform] || platform;
+  $('#launchPlatformLabel').textContent = platformLabel;
+  $('#launchClaudePath').textContent = info.claudePath || 'claude';
+
+  const primaryCmd = platform === 'win32' ? info.commands.ps : info.commands.unix;
+  $('#launchCmdPrimary').textContent = primaryCmd;
+
+  badgeEl.textContent = 'ready';
+  badgeEl.className = 'badge ok';
+}
+
+function renderLaunchPage() {
+  const info = state.launchInfo;
+  const base = location.origin;
+
+  const claudeCmd = (info && info.claudePath) ? info.claudePath : 'claude';
+  const platform  = (info && info.platform) || (navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin');
+  const platformLabel = { darwin:'macOS', linux:'Linux', win32:'Windows' }[platform] || platform;
+
+  // Status card
+  const statusBody = $('#launchCliStatusBody');
+  if (statusBody && info) {
+    statusBody.innerHTML = `
+      <div class="k">Platform</div><div class="v">${escapeHtml(platformLabel)} (${escapeHtml(info.platform)})</div>
+      <div class="k">Claude CLI</div><div class="v ${info.claudeInstalled?'ok':'bad'}">${info.claudeInstalled ? escapeHtml(info.claudePath) : 'not found — install via System page'}</div>
+      <div class="k">Proxy base URL</div><div class="v">${escapeHtml(info.base)}</div>
+    `;
+  }
+
+  // Platform pill
+  const pill = $('#launchPlatformPill');
+  if (pill) pill.textContent = 'platform: ' + platformLabel;
+
+  // Base URL
+  const baseEl = $('#launchBase');
+  if (baseEl) baseEl.textContent = (info && info.base) || base;
+
+  // Commands
+  if (info) {
+    const u = $('#cmdUnix'); if (u) u.textContent = info.commands.unix;
+    const w = $('#cmdWin');  if (w) w.textContent = info.commands.ps;
+    const c = $('#cmdWinCmd'); if (c) c.textContent = info.commands.wincmd;
+  } else {
+    const unix = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\nexport ANTHROPIC_API_KEY="proxy-max"\nclaude --dangerously-skip-permissions`;
+    const ps   = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\n$env:ANTHROPIC_API_KEY = "proxy-max"\nclaude --dangerously-skip-permissions`;
+    const cmd  = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && set ANTHROPIC_API_KEY=proxy-max && claude --dangerously-skip-permissions`;
+    const u = $('#cmdUnix'); if (u) u.textContent = unix;
+    const w = $('#cmdWin');  if (w) w.textContent = ps;
+    const c = $('#cmdWinCmd'); if (c) c.textContent = cmd;
+  }
+
+  const boot = $('#cmdBoot');
+  if (boot) boot.textContent =
+`# macOS / Linux
+bash ./bootstrap.sh --claude
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File .\\bootstrap.ps1 --claude`;
+
+  // Highlight the recommended tab based on platform
+  if (platform === 'win32') {
+    switchShellTab('ps');
+  } else {
+    switchShellTab('unix');
+  }
+}
+
+// ── Health ──
+function setHealth(h) {
+  const el = $('#health'); const v = $('#healthValue');
+  if (h.poolMode && h.poolSize > 0) {
+    el.classList.remove('warn'); el.classList.add('ok');
+    v.textContent = `pool: ${h.poolSize} model${h.poolSize !== 1 ? 's' : ''}`;
+  } else if (h.provider && h.model) {
+    el.classList.remove('warn'); el.classList.add('ok');
+    v.textContent = `${h.provider} · ${h.model}`;
+  } else {
+    el.classList.remove('ok'); el.classList.add('warn');
+    v.textContent = 'not configured';
+  }
+}
+
+// ── Limits ──
+function applyLimits(l) {
+  const lim = l.limits || {};
+  $('#lim_tpm').value = lim.tpm ?? '';
+  $('#lim_rpm').value = lim.rpm ?? '';
+  $('#lim_enabled').checked = lim.enabled !== false;
+  if (l.usage) {
+    $('#limitsUsage').textContent =
+      `Window: ${l.usage.rpm} requests, ${l.usage.tpm.toLocaleString()} tokens in the last ${l.usage.windowSeconds}s.`;
+  }
+}
+
+async function saveLimits() {
+  const payload = {
+    tpm: Number($('#lim_tpm').value || 0),
+    rpm: Number($('#lim_rpm').value || 0),
+    enabled: $('#lim_enabled').checked
+  };
+  $('#limitsResult').innerHTML = '<span class="small">saving…</span>';
+  try {
+    const r = await fetch('/api/limits', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if (r.ok) { $('#limitsResult').innerHTML = '<span class="ok">✓ saved</span>'; applyLimits(j); }
+    else $('#limitsResult').innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>';
+  } catch (e) { $('#limitsResult').innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+}
+
+// ── Provider / model form ──
+function fillModelSelect(p) {
+  const sel = $('#modelSelect');
+  sel.innerHTML = '';
+  const groups = state.models[p] || [];
+  for (const g of groups) {
+    const og = document.createElement('optgroup');
+    og.label = g.group;
+    for (const m of g.models) {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.label + ' — ' + m.id;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+}
+
+function selectProvider(p) {
+  state.provider = p;
+  for (const el of document.querySelectorAll('.src')) el.classList.toggle('active', el.dataset.p === p);
+  $('#formCard').classList.remove('hide');
+  $('#srcBadge').textContent = ({bedrock:'AWS Bedrock', azure:'Azure AI Foundry', nvidia:'NVIDIA NIM'})[p];
+  $('#provBadge').textContent = ({bedrock:'aws', azure:'azure', nvidia:'nvidia'})[p];
+  $('#azureFields').classList.toggle('hide', p!=='azure');
+  $('#nvidiaFields').classList.toggle('hide', p!=='nvidia');
+  $('#bedrockFields').classList.toggle('hide', p!=='bedrock');
+
+  fillModelSelect(p);
+
+  const saved = (state.config.providers || {})[p] || {};
+  if (saved.model) {
+    const exists = [...$('#modelSelect').options].some(o => o.value === saved.model);
+    if (exists) $('#modelSelect').value = saved.model; else $('#modelCustom').value = saved.model;
+  } else { $('#modelCustom').value = ''; }
+
+  if (p === 'azure') {
+    $('#az_endpoint').value  = saved.endpoint   || '';
+    $('#az_apiKey').value    = saved.apiKey      || '';
+    $('#az_deployment').value= saved.deployment  || '';
+    $('#az_apiVersion').value= saved.apiVersion  || '';
+  } else if (p === 'nvidia') {
+    $('#nv_endpoint').value  = saved.endpoint || '';
+    $('#nv_apiKey').value    = saved.apiKey   || '';
+  } else if (p === 'bedrock') {
+    $('#br_region').value    = saved.region           || 'us-east-1';
+    $('#br_endpoint').value  = saved.endpoint         || '';
+    $('#br_access').value    = saved.accessKeyId      || '';
+    $('#br_secret').value    = saved.secretAccessKey  || '';
+    $('#br_token').value     = saved.sessionToken     || '';
+  }
+  renderLaunchCard();
+}
+
+function extractNvidiaModelFromUrl(url) {
+  const m = (url || '').match(/^https?:\/\/build\.nvidia\.com\/([^?#]+?)\/?$/);
+  return m ? m[1] : null;
+}
+
+function gatherConfig() {
+  const p = state.provider;
+  const model = ($('#modelCustom').value.trim()) || $('#modelSelect').value;
+  if (p === 'azure') return { model,
+    endpoint:   $('#az_endpoint').value.trim(),
+    apiKey:     $('#az_apiKey').value,
+    deployment: $('#az_deployment').value.trim(),
+    apiVersion: $('#az_apiVersion').value.trim() };
+  if (p === 'nvidia') {
+    const rawEndpoint = $('#nv_endpoint').value.trim();
+    const buildModel  = extractNvidiaModelFromUrl(rawEndpoint);
+    return {
+      model: model || buildModel || '',
+      endpoint: buildModel ? 'https://integrate.api.nvidia.com/v1' : (rawEndpoint || 'https://integrate.api.nvidia.com/v1'),
+      apiKey: $('#nv_apiKey').value
+    };
+  }
+  if (p === 'bedrock') return { model,
+    region:          $('#br_region').value.trim() || 'us-east-1',
+    endpoint:        $('#br_endpoint').value.trim(),
+    accessKeyId:     $('#br_access').value.trim(),
+    secretAccessKey: $('#br_secret').value,
+    sessionToken:    $('#br_token').value };
+}
+
+async function save() {
+  const cfg = gatherConfig();
+  if (!cfg.model) return toast('Pick or enter a model id', false);
+  const r = await fetch('/api/config', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ provider: state.provider, config: cfg })
+  });
+  if (!r.ok) return toast('Save failed', false);
+  toast('Saved & activated');
+  state.config = await fetch('/api/config').then(r=>r.json());
+  setHealth(await fetch('/api/health').then(r=>r.json()));
+  renderLaunchCard();
+}
+
+async function testConn() {
+  const cfg = gatherConfig();
+  $('#testResult').innerHTML = '<span class="small">testing…</span>';
+  try {
+    const r = await fetch('/api/test', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ provider: state.provider, config: cfg })
+    });
+    const j = await r.json();
+    if (j.ok) $('#testResult').innerHTML = '<span class="ok">✓ reachable</span> <span class="small">— ' + escapeHtml((j.sample||'').slice(0,180)) + '</span>';
+    else      $('#testResult').innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>';
+  } catch (e) { $('#testResult').innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── Model browser ──
+function renderModelsBrowser() {
+  const root = $('#modelsBrowser');
+  const q = ($('#modelSearch').value || '').toLowerCase();
+  const labels = { bedrock:'AWS Bedrock', azure:'Azure AI Foundry', nvidia:'NVIDIA NIM' };
+  const html = [];
+  for (const p of ['bedrock','azure','nvidia']) {
+    const groups = state.models[p] || [];
+    const matched = groups.map(g => ({
+      group: g.group,
+      models: g.models.filter(m => !q || m.id.toLowerCase().includes(q) || m.label.toLowerCase().includes(q))
+    })).filter(g => g.models.length);
+    if (!matched.length) continue;
+    html.push(`<h4 style="margin:14px 0 6px;color:var(--text);font-size:13.5px">${labels[p]}</h4>`);
+    for (const g of matched) {
+      html.push(`<div class="small" style="margin:8px 0 4px;color:var(--dim);letter-spacing:.04em">${escapeHtml(g.group)}</div>`);
+      for (const m of g.models) {
+        html.push(`<div class="check">
+          <div class="left">
+            <div class="ic">${p[0].toUpperCase()}</div>
+            <div class="meta">
+              <div class="title">${escapeHtml(m.label)}</div>
+              <div class="path">${escapeHtml(m.id)}</div>
+            </div>
+          </div>
+          <button class="btn secondary sm" data-use="${p}|${escapeHtml(m.id)}">Use</button>
+        </div>`);
+      }
+    }
+  }
+  root.innerHTML = html.join('');
+  for (const b of root.querySelectorAll('button[data-use]')) {
+    b.addEventListener('click', () => {
+      const [p, id] = b.dataset.use.split('|');
+      navTo('provider');
+      selectProvider(p);
+      const sel = $('#modelSelect');
+      const has = [...sel.options].some(o => o.value === id);
+      if (has) { sel.value = id; $('#modelCustom').value = ''; }
+      else { $('#modelCustom').value = id; }
+      toast('Loaded into form — set credentials & save');
+    });
+  }
+}
+document.addEventListener('input', e => {
+  if (e.target.id === 'modelSearch') renderModelsBrowser();
+});
+
+// ── System ──
+async function refreshSystem() {
+  const sys = await fetch('/api/system').then(r=>r.json());
+  state.system = sys;
+  $('#osBadge').textContent = `${sys.platform}/${sys.arch}`;
+  const kv = $('#sysKv');
+  kv.innerHTML = '';
+  const rows = [
+    ['User',             sys.user],
+    ['Home',             sys.home],
+    ['Admin / root',     sys.admin ? '<span class="ok">yes</span>' : '<span class="warn">no — installs use per-user prefix</span>'],
+    ['Home writable',    sys.writableHome ? '<span class="ok">yes</span>' : '<span class="err">no</span>'],
+    ['npm prefix',       sys.npmPrefix],
+    ['Portable Node dir',sys.portableNodeDir],
+    ['Cache dir',        sys.proxyHome]
+  ];
+  for (const [k,v] of rows) kv.insertAdjacentHTML('beforeend', `<div class="k">${k}</div><div class="v">${v}</div>`);
+
+  const checks = $('#checks');
+  checks.innerHTML = '';
+  for (const [name, key, ic, hint] of [
+    ['Node.js',       'node',   'N', 'Required to run this proxy.'],
+    ['npm',           'npm',    'n', 'Used to install the Anthropic CLI.'],
+    ['Anthropic CLI', 'claude', 'C', 'The claude binary this proxy translates for.']
+  ]) {
+    const c = sys.components[key]; const ok = !!c.ok;
+    checks.insertAdjacentHTML('beforeend', `<div class="check ${ok?'ok':'bad'}">
+      <div class="left">
+        <div class="ic">${ic}</div>
+        <div class="meta">
+          <div class="title">${name} ${ok?`<span class="ok">— ${escapeHtml(c.version||'')}</span>`:'<span class="err">— not found</span>'}</div>
+          <div class="path">${escapeHtml(c.path||hint)}</div>
+        </div>
+      </div>
+      <span class="pill ${ok?'ok':'err'}"><span class="dot"></span>${ok?'detected':'missing'}</span>
+    </div>`);
+  }
+
+  $('#pathCount').textContent = sys.pathDirs.length;
+  $('#pathList').textContent  = sys.pathDirs.join('\n');
+
+  const allOk = sys.components.node.ok && sys.components.npm.ok && sys.components.claude.ok;
+  $('#installAll').disabled    = allOk;
+  $('#installAll').textContent = allOk ? 'All installed' : 'Install missing';
+  $('#installHint').innerHTML  = sys.admin
+    ? '<span class="ok">admin detected</span> — global installs available'
+    : '<span class="warn">no admin</span> — installs go to <code>' + escapeHtml(sys.npmPrefix) + '</code>';
+}
+
+// ── Panel test ──
+async function refreshPanelTest() {
+  try {
+    const [s, e] = await Promise.all([
+      fetch('/api/panel/summary').then(r => r.json()),
+      fetch('/api/panel/events?limit=20').then(r => r.json())
+    ]);
+    const summary = (s && s.summary) || {};
+    $('#panelSummary').innerHTML = `
+      <div class="k">Total events</div><div class="v">${summary.total || 0}</div>
+      <div class="k">Impressions</div><div class="v">${summary.impressions || 0}</div>
+      <div class="k">Clicks</div><div class="v">${summary.clicks || 0}</div>
+      <div class="k">CTR</div><div class="v">${summary.ctr || 0}</div>
+      <div class="k">Watch ms total</div><div class="v">${summary.watchMsTotal || 0}</div>
+    `;
+    $('#panelEvents').textContent = JSON.stringify((e && e.events) || [], null, 2) || '(empty)';
+  } catch (err) {
+    $('#panelSummary').innerHTML = '<div class="k">Error</div><div class="v err">' + escapeHtml(err.message) + '</div>';
+    $('#panelEvents').textContent = '(error)';
+  }
+}
+
+function makeTestEvent(type) {
+  return { type, adId:'test-ad-1', impressionId:`imp-${Date.now()}`, sessionId:'local-session', watchMs: type==='impression'?4500:0, source:'ui-test' };
+}
+async function postPanelEvent(type) {
+  const r = await fetch('/api/panel/event', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(makeTestEvent(type))
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'failed');
+  await refreshPanelTest();
+}
+async function resetPanelEvents() {
+  await fetch('/api/panel/reset', { method:'POST' });
+  await refreshPanelTest();
+}
+
+async function runInstall(what) {
+  const con = $('#installConsole'); con.textContent = '';
+  const sys = state.system || await fetch('/api/system').then(r=>r.json());
+  const r = await fetch(`/api/install?what=${encodeURIComponent(what)}&admin=${sys.admin?1:0}`, { method:'POST' });
+  const reader = r.body.getReader(); const dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream:true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const chunk = buf.slice(0, idx); buf = buf.slice(idx+2);
+      const lines = chunk.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
+      for (const l of lines) {
+        try {
+          const evt = JSON.parse(l);
+          if (evt.type === 'log') {
+            const cls = evt.level === 'warn' ? 'warn' : '';
+            con.insertAdjacentHTML('beforeend', `<span class="${cls}">${escapeHtml(evt.msg)}</span>`);
+            con.scrollTop = con.scrollHeight;
+          } else if (evt.type === 'done') {
+            con.insertAdjacentHTML('beforeend', `\n[exit ${evt.code}]\n`);
+            if (evt.system) { state.system = evt.system; await refreshSystem(); }
+            // Refresh launch info after install in case claude was installed
+            await loadLaunchInfo();
+          }
+        } catch {}
+      }
+    }
+  }
+}
+
+// ── Model Pool ──
+let _poolData = { pool: [], rrIndex: 0 };
+
+async function loadPool() {
+  try {
+    _poolData = await fetch('/api/pool').then(r => r.json());
+    renderPool(_poolData);
+  } catch {}
+}
+
+function renderPool(data) {
+  const pool = data.pool || [];
+  const list = $('#poolList');
+  const sizeEl = $('#poolSizePill'); if (sizeEl) sizeEl.innerHTML = `<span class="dot" style="background:${pool.length>0?'var(--ok)':'var(--mute)'}"></span>${pool.length} model${pool.length!==1?'s':''}`;
+  const rrEl = $('#poolRRPill'); if (rrEl) rrEl.textContent = `rr: ${data.rrIndex ?? 0}`;
+  if (!list) return;
+  if (pool.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div>';
+    return;
+  }
+  const provAbbr = { nvidia:'N', azure:'A', bedrock:'B' };
+  list.innerHTML = pool.map((e, i) => {
+    const s = e.stats || { req:0, err:0, lastMs:0, cooldownSecsLeft:0 };
+    const cooled = (s.cooldownSecsLeft || 0) > 0;
+    const errPct = s.req > 0 ? Math.round(s.err / s.req * 100) : 0;
+    const statStr = `${s.req} req · ${s.err} err${s.req>0?' · '+s.lastMs+'ms':''}`;
+    const coolBadge = cooled
+      ? `<span class="cooldown-badge">⏸ ${s.cooldownSecsLeft >= 3600 ? Math.ceil(s.cooldownSecsLeft/60)+'m' : s.cooldownSecsLeft+'s'}</span>`
+      : '';
+    return `<div class="pool-row${cooled?' cooled':''}">
+      <div class="pool-prov ${e.provider}">${provAbbr[e.provider]||'?'}</div>
+      <div class="pool-info">
+        <div class="pool-label">${escapeHtml(e.label || e.model)}</div>
+        <div class="pool-model">${escapeHtml(e.model)}</div>
+      </div>
+      ${coolBadge}
+      <span class="pool-stat ${s.err>0&&errPct>50?'warn':''}">${escapeHtml(statStr)}</span>
+      <button class="btn-remove" data-pool-idx="${i}" title="Remove">×</button>
+    </div>`;
+  }).join('');
+  for (const btn of list.querySelectorAll('.btn-remove')) {
+    btn.addEventListener('click', () => removeFromPool(Number(btn.dataset.poolIdx)));
+  }
+}
+
+function poolProviderChanged() {
+  const p = $('#poolProvider').value;
+
+  // Populate model datalist
+  const dl = $('#poolModelList');
+  dl.innerHTML = '';
+  const groups = (state.models || {})[p] || [];
+  for (const g of groups) for (const m of g.models) {
+    const o = document.createElement('option'); o.value = m.id; dl.appendChild(o);
+  }
+
+  // Show credential status for this provider
+  const saved = (state.config.providers || {})[p] || {};
+  const hasKey = !!(saved.apiKey || saved.accessKeyId);
+  const statusEl = $('#poolCredStatus');
+  if (!statusEl) return;
+
+  const provNames = { nvidia: 'NVIDIA NIM', azure: 'Azure AI Foundry', bedrock: 'AWS Bedrock' };
+  const rows = [];
+
+  if (p === 'nvidia') {
+    rows.push(['API Key', saved.apiKey ? '••••' + saved.apiKey.slice(-4) : '<span class="err">not set</span>']);
+    rows.push(['Endpoint', saved.endpoint || '<span class="mute">default (integrate.api.nvidia.com)</span>']);
+  } else if (p === 'azure') {
+    rows.push(['Endpoint', saved.endpoint ? escapeHtml(saved.endpoint) : '<span class="err">not set</span>']);
+    rows.push(['API Key', saved.apiKey ? '••••' + saved.apiKey.slice(-4) : '<span class="err">not set</span>']);
+    rows.push(['API Version', saved.apiVersion || '<span class="mute">default</span>']);
+    if (saved.deployment) rows.push(['Deployment', escapeHtml(saved.deployment)]);
+  } else if (p === 'bedrock') {
+    rows.push(['Region', saved.region || '<span class="err">not set</span>']);
+    rows.push(['Access Key', saved.accessKeyId ? '••••' + saved.accessKeyId.slice(-4) : '<span class="err">not set</span>']);
+    rows.push(['Secret Key', saved.secretAccessKey ? '••••••••' : '<span class="err">not set</span>']);
+  }
+
+  const icon = hasKey ? '<span class="ok">✓</span>' : '<span class="err">✗</span>';
+  const status = hasKey
+    ? `${icon} <strong>${provNames[p]}</strong> credentials saved — models added here will use them`
+    : `${icon} <strong>${provNames[p]}</strong> has no saved credentials — <span class="link-btn" onclick="navTo('provider')" style="color:var(--accent);cursor:pointer">configure on Provider page</span> first`;
+
+  statusEl.innerHTML = `<div style="margin-bottom:${rows.length?'8px':'0'}">${status}</div>`
+    + rows.map(([k,v]) => `<div style="display:flex;gap:8px"><span style="color:var(--dim);min-width:90px">${k}</span><span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px">${v}</span></div>`).join('');
+
+  const addBtn = $('#poolAddBtn');
+  if (addBtn) addBtn.disabled = !hasKey;
+}
+
+async function addToPool() {
+  const provider = $('#poolProvider').value;
+  const model = ($('#poolModel').value || '').trim();
+  const label = ($('#poolLabel').value || '').trim() || null;
+  const overrideEndpoint = ($('#poolEntryEndpoint')?.value || '').trim() || null;
+  const overrideApiKey   = ($('#poolEntryApiKey')?.value || '').trim() || null;
+  const result = $('#poolAddResult');
+  if (!model) { if (result) result.innerHTML = '<span class="err">Enter a model ID</span>'; return; }
+  const current = (_poolData.pool || []).map(e => {
+    const o = { provider: e.provider, model: e.model, label: e.label || null };
+    for (const f of ['endpoint','apiKey','apiVersion','deployment','region']) if (e[f]) o[f] = e[f];
+    return o;
+  });
+  if (current.some(e => e.provider === provider && e.model === model)) {
+    if (result) result.innerHTML = '<span class="warn">Already in pool</span>'; return;
+  }
+  const newEntry = { provider, model, label };
+  if (overrideEndpoint) newEntry.endpoint = overrideEndpoint;
+  if (overrideApiKey)   newEntry.apiKey   = overrideApiKey;
+  const updated = [...current, newEntry];
+  if (result) result.innerHTML = '<span class="small">saving…</span>';
+  try {
+    const r = await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: updated }) });
+    const j = await r.json();
+    if (r.ok) {
+      if (result) result.innerHTML = '<span class="ok">✓ added</span>';
+      $('#poolModel').value = ''; $('#poolLabel').value = '';
+      if ($('#poolEntryEndpoint')) $('#poolEntryEndpoint').value = '';
+      if ($('#poolEntryApiKey'))   $('#poolEntryApiKey').value = '';
+      await loadPool();
+      const h = await fetch('/api/health').then(r=>r.json());
+      setHealth(h);
+    } else { if (result) result.innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>'; }
+  } catch (e) { if (result) result.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+}
+
+async function removeFromPool(idx) {
+  const current = (_poolData.pool || []).map(e => {
+    const o = { provider: e.provider, model: e.model, label: e.label || null };
+    for (const f of ['endpoint','apiKey','apiVersion','deployment','region']) if (e[f]) o[f] = e[f];
+    return o;
+  });
+  current.splice(idx, 1);
+  try {
+    await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: current }) });
+    await loadPool();
+    const h = await fetch('/api/health').then(r=>r.json());
+    setHealth(h);
+  } catch {}
+}
+
+async function resetCircuits() {
+  try {
+    await fetch('/api/pool/reset-circuits', { method: 'POST' });
+    toast('Circuit breakers reset — all models active');
+    await loadPool();
+  } catch (e) { toast(e.message, false); }
+}
+
+// ── Request Log ──
+async function loadLogs() {
+  try {
+    // Use file-based endpoint — survives restarts, works from VM.
+    const data = await fetch('/api/logs/file?lines=200').then(r => r.json());
+    const pathEl = $('#logFilePath');
+    if (pathEl && data.logFile) {
+      const files = (data.logFiles || []).map(f => `${f.name} (${(f.bytes/1024).toFixed(0)} KB)`).join('  ·  ');
+      pathEl.textContent = `Log: ${data.logFile}${files ? '   —   ' + files : ''}`;
+    }
+    renderLogs(data.logs || [], data.total || 0);
+  } catch {}
+}
+
+async function clearLogs() {
+  try {
+    await fetch('/api/logs/clear', { method: 'POST' });
+    renderLogs([], 0);
+    const pathEl = $('#logFilePath');
+    if (pathEl) pathEl.textContent = '';
+    const cnt = $('#logCount');
+    if (cnt) cnt.textContent = '0 entries';
+    toast('Log cleared');
+  } catch (e) { toast(e.message, false); }
+}
+
+function renderLogs(logs, total) {
+  const cnt = $('#logCount');
+  if (cnt) cnt.textContent = `${total} entr${total === 1 ? 'y' : 'ies'} on disk`;
+  const el = $('#logTable');
+  if (!el) return;
+  if (logs.length === 0) {
+    el.innerHTML = '<div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div>';
+    return;
+  }
+  const statusColor = s => s === 'ok' ? 'var(--ok)' : (s === 'all-failed' || s === 'mid-stream-err') ? 'var(--err)' : 'var(--warn)';
+  const rows = logs.map(e => {
+    // File log uses e.time (ISO string); in-memory uses e.ts (ms integer).
+    const t = e.time ? new Date(e.time) : new Date(e.ts || 0);
+    const time = t.toLocaleTimeString();
+    // File log stores attempts as flat {label,status,durationMs,error}.
+    const attempts = (e.attempts || []).map(a => {
+      const skipped = a.status === 'skipped';
+      const icon  = skipped ? '⏸' : a.status === 'ok' ? '✓' : '✗';
+      const color = skipped ? 'var(--warn)' : a.status === 'ok' ? 'var(--ok)' : 'var(--err)';
+      const err   = a.error ? ` — ${escapeHtml(String(a.error).slice(0, 150))}` : '';
+      return `<div style="font-size:11px;color:var(--dim);padding-left:8px"><span style="color:${color}">${icon}</span> ${escapeHtml(a.label || '')} <span style="color:var(--mute)">${a.durationMs}ms${err}</span></div>`;
+    }).join('');
+    const status = e.finalStatus || e.status || '?';
+    const label  = e.label || (e.attempts && e.attempts[0] && e.attempts[0].label) || '?';
+    const flags  = [e.stream && 'stream', e.hasTools && 'tools', e.hasSystem && 'sys'].filter(Boolean).join(' ');
+    const showAttempts = (e.attempts || []).length > 1 ||
+                         ((e.attempts || []).length === 1 && (e.attempts[0].status === 'err' || e.attempts[0].status === 'skipped'));
+    return `<div style="border-bottom:1px solid var(--line);padding:8px 4px">
+      <div style="display:flex;gap:10px;align-items:baseline">
+        <span style="color:var(--dim);font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;flex-shrink:0">${time}</span>
+        <span style="font-size:12px;font-weight:500;color:${statusColor(status)}">${escapeHtml(status)}</span>
+        <span style="font-size:11.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</span>
+        <span style="font-size:11px;color:var(--mute);flex-shrink:0">${e.totalMs}ms${e.poolSize ? ' · ' + e.poolSize + ' pool' : ''}</span>
+        ${flags ? `<span style="font-size:10px;color:var(--dim);flex-shrink:0">${escapeHtml(flags)}</span>` : ''}
+      </div>
+      ${showAttempts ? attempts : ''}
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div style="max-height:500px;overflow-y:auto">${rows}</div>`;
+}
+
+$('#refreshSys').addEventListener('click', refreshSystem);
+$('#installAll').addEventListener('click', () => runInstall('all'));
+$('#installClaude').addEventListener('click', () => runInstall('claude'));
+$('#installNode').addEventListener('click', () => runInstall('node'));
+$('#panelRefresh').addEventListener('click', refreshPanelTest);
+$('#panelImpression').addEventListener('click', async () => { try { await postPanelEvent('impression'); toast('impression sent'); } catch (e) { toast(e.message,false); } });
+$('#panelClick').addEventListener('click', async () => { try { await postPanelEvent('click'); toast('click sent'); } catch (e) { toast(e.message,false); } });
+$('#panelReset').addEventListener('click', async () => { try { await resetPanelEvents(); toast('events reset'); } catch (e) { toast(e.message,false); } });
+$('#saveBtn').addEventListener('click', save);
+$('#testBtn').addEventListener('click', testConn);
+$('#limitsSaveBtn').addEventListener('click', saveLimits);
+
+loadAll();
+</script>
+</body>
+</html>
