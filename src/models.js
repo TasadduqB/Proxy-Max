@@ -108,7 +108,7 @@ module.exports = {
         { id: 'nvidia/llama-3.1-nemotron-51b-instruct',       label: 'Llama 3.1 Nemotron 51B Instruct' },
         { id: 'nvidia/llama-3.1-nemotron-nano-8b-v1',         label: 'Llama 3.1 Nemotron Nano 8B v1' },
         { id: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1',      label: 'Llama 3.1 Nemotron Nano VL 8B v1 (vision-language)' },
-        { id: 'nvidia/nemotron-4-340b-instruct',              label: 'Nemotron 4 340B Instruct' },
+        { id: 'nvidia/nemotron-4-340b-reward',                label: 'Nemotron 4 340B Reward' },
         { id: 'nvidia/nemotron-mini-4b-instruct',             label: 'Nemotron Mini 4B Instruct' },
         { id: 'nvidia/cosmos-reason2-8b',                     label: 'Cosmos Reason2 8B' },
         { id: 'nvidia/llama3-chatqa-1.5-70b',                 label: 'ChatQA 1.5 70B' },
@@ -117,7 +117,7 @@ module.exports = {
     },
     { group: 'DeepSeek',
       models: [
-        { id: 'deepseek-ai/deepseek-v4-pro',            label: 'DeepSeek V4 Pro (1.6T MoE, 1M ctx)' },
+        { id: 'deepseek-ai/deepseek-r2',                label: 'DeepSeek R2' },
         { id: 'deepseek-ai/deepseek-v4-flash',          label: 'DeepSeek V4 Flash (284B MoE, 1M ctx)' },
         { id: 'deepseek-ai/deepseek-coder-6.7b-instruct', label: 'DeepSeek Coder 6.7B Instruct' }
       ]

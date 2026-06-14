@@ -69,9 +69,16 @@ function anthropicToOpenAIMessages(body) {
   return out;
 }
 
+// Claude Code internal tool names that only work with Claude models (UI commands).
+// Forwarding them to non-Claude models causes those models to call them and get
+// "UI command" errors back from Claude Code, causing the session to get stuck.
+const CLAUDE_CODE_INTERNAL_TOOLS = new Set(['Skill']);
+
 function anthropicToolsToOpenAI(tools) {
   if (!tools) return undefined;
-  return tools.map(t => ({
+  const filtered = tools.filter(t => !CLAUDE_CODE_INTERNAL_TOOLS.has(t.name));
+  if (filtered.length === 0) return undefined;
+  return filtered.map(t => ({
     type: 'function',
     function: {
       name: t.name,
@@ -352,6 +359,7 @@ async function* iterSSE(response, idleTimeoutMs = 90000) {
 
 module.exports = {
   newId,
+  CLAUDE_CODE_INTERNAL_TOOLS,
   anthropicToOpenAIMessages,
   anthropicToolsToOpenAI,
   createAnthropicSSEEmitter,

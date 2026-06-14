@@ -5,6 +5,7 @@
 const {
   anthropicToOpenAIMessages,
   anthropicToolsToOpenAI,
+  CLAUDE_CODE_INTERNAL_TOOLS,
   createAnthropicSSEEmitter,
   buildAnthropicResponse,
   iterSSE
@@ -33,8 +34,8 @@ function buildPayload(body, model, cfg, isResponsesApi) {
   const tools = anthropicToolsToOpenAI(body.tools);
   if (tools) payload.tools = tools;
   if (body.tool_choice) {
-    if (body.tool_choice.type === 'auto') payload.tool_choice = 'auto';
-    else if (body.tool_choice.type === 'any') payload.tool_choice = 'required';
+    // Don't send 'auto' — it's the default and some NVIDIA models reject it as explicit value.
+    if (body.tool_choice.type === 'any') payload.tool_choice = 'required';
     else if (body.tool_choice.type === 'tool') {
       payload.tool_choice = { type: 'function', function: { name: body.tool_choice.name } };
     }
@@ -72,16 +73,18 @@ function buildResponsesPayload(body, model) {
   if (body.max_tokens != null) payload.max_output_tokens = body.max_tokens;
 
   if (body.tools) {
-    payload.tools = body.tools.map(t => ({
-      type: 'function',
-      name: t.name,
-      description: t.description,
-      parameters: t.input_schema || { type: 'object', properties: {} }
-    }));
+    const filtered = body.tools.filter(t => !CLAUDE_CODE_INTERNAL_TOOLS.has(t.name));
+    if (filtered.length > 0) {
+      payload.tools = filtered.map(t => ({
+        type: 'function',
+        name: t.name,
+        description: t.description,
+        parameters: t.input_schema || { type: 'object', properties: {} }
+      }));
+    }
   }
   if (body.tool_choice) {
-    if (body.tool_choice.type === 'auto') payload.tool_choice = 'auto';
-    else if (body.tool_choice.type === 'any') payload.tool_choice = 'required';
+    if (body.tool_choice.type === 'any') payload.tool_choice = 'required';
     else if (body.tool_choice.type === 'tool') {
       payload.tool_choice = { type: 'function', name: body.tool_choice.name };
     }
