@@ -303,26 +303,50 @@ function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, 
 }
 
 // Iterate `data: ...` SSE lines from a Response body (Node fetch ReadableStream).
-async function* iterSSE(response) {
+// idleTimeoutMs: if no bytes arrive within this window the stream is considered
+// stalled and an error is thrown. Default 90s. Set to 0 to disable.
+async function* iterSSE(response, idleTimeoutMs = 90000) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buf.indexOf('\n\n')) >= 0) {
-      const chunk = buf.slice(0, idx);
-      buf = buf.slice(idx + 2);
-      const dataLines = chunk.split('\n')
-        .filter(l => l.startsWith('data:'))
-        .map(l => l.slice(5).trimStart());
-      if (dataLines.length === 0) continue;
-      const data = dataLines.join('\n');
-      if (data === '[DONE]') return;
-      try { yield JSON.parse(data); } catch { /* skip non-JSON keepalives */ }
+
+  // Wrap each read() in a per-chunk deadline so a stalled upstream is detected
+  // quickly instead of hanging the connection indefinitely.
+  function readChunk() {
+    return new Promise((resolve, reject) => {
+      const t = idleTimeoutMs > 0
+        ? setTimeout(() => {
+            reader.cancel().catch(() => {});
+            reject(new Error(`Stream stalled — no data for ${Math.round(idleTimeoutMs / 1000)}s`));
+          }, idleTimeoutMs)
+        : null;
+      reader.read().then(
+        r => { if (t) clearTimeout(t); resolve(r); },
+        e => { if (t) clearTimeout(t); reject(e); }
+      );
+    });
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await readChunk();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) >= 0) {
+        const chunk = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const dataLines = chunk.split('\n')
+          .filter(l => l.startsWith('data:'))
+          .map(l => l.slice(5).trimStart());
+        if (dataLines.length === 0) continue;
+        const data = dataLines.join('\n');
+        if (data === '[DONE]') return;
+        try { yield JSON.parse(data); } catch { /* skip non-JSON keepalives */ }
+      }
     }
+  } finally {
+    try { reader.cancel(); } catch {}
   }
 }
 

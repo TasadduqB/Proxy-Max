@@ -133,9 +133,15 @@ async function callOpenAICompatible(providerCfg, body, res) {
   const { url, headers, isResponsesApi } = buildRequest(cfg);
   const payload = buildPayload(body, modelForUpstream(cfg), cfg, isResponsesApi);
 
-  const timeoutMs = Number(providerCfg.timeoutMs) > 0 ? Number(providerCfg.timeoutMs) : 60000;
+  // Connection timeout: how long to wait for upstream to accept the request and
+  // start sending headers back. For non-streaming this is also the response timeout.
+  // For streaming we switch to a per-chunk idle timeout once data starts flowing,
+  // so complex agentic/search tasks that take minutes don't get killed prematurely.
+  const connectTimeoutMs = Number(providerCfg.timeoutMs) > 0 ? Number(providerCfg.timeoutMs) : 60000;
+  const idleTimeoutMs = Number(providerCfg.idleTimeoutMs) > 0 ? Number(providerCfg.idleTimeoutMs) : 90000;
+
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), connectTimeoutMs);
 
   let upstream;
   try {
@@ -147,14 +153,15 @@ async function callOpenAICompatible(providerCfg, body, res) {
     });
   } catch (err) {
     clearTimeout(timer);
-    if (err.name === 'AbortError') throw new Error(`Upstream request timed out after ${timeoutMs}ms (URL: ${url})`);
+    if (err.name === 'AbortError') throw new Error(`Upstream connection timed out after ${connectTimeoutMs}ms (URL: ${url})`);
     throw Object.assign(err, { message: `${err.message} (URL: ${url})` });
   } finally {
-    if (!body.stream) clearTimeout(timer);
+    // For streaming: clear the connection timer as soon as headers arrive —
+    // the per-chunk idle timeout in iterSSE takes over from here.
+    clearTimeout(timer);
   }
 
   if (!upstream.ok) {
-    clearTimeout(timer);
     const errText = await upstream.text();
     throw new Error(`Upstream ${upstream.status} from ${url}: ${errText.slice(0, 600)}`);
   }
@@ -166,15 +173,13 @@ async function callOpenAICompatible(providerCfg, body, res) {
     const emitter = createAnthropicSSEEmitter(res, cfg.model);
     try {
       if (isResponsesApi) {
-        await streamResponsesApi(upstream, emitter);
+        await streamResponsesApi(upstream, emitter, idleTimeoutMs);
       } else {
-        await streamChatCompletions(upstream, emitter);
+        await streamChatCompletions(upstream, emitter, idleTimeoutMs);
       }
       emitter.end();
     } catch (err) {
       emitter.fail(err);
-    } finally {
-      clearTimeout(timer);
     }
     return;
   }
@@ -193,8 +198,8 @@ async function callOpenAICompatible(providerCfg, body, res) {
 }
 
 // Standard chat/completions SSE streaming.
-async function streamChatCompletions(upstream, emitter) {
-  for await (const evt of iterSSE(upstream)) {
+async function streamChatCompletions(upstream, emitter, idleTimeoutMs) {
+  for await (const evt of iterSSE(upstream, idleTimeoutMs)) {
     const choice = evt.choices && evt.choices[0];
     if (!choice) {
       if (evt.usage) emitter.setUsage(evt.usage);
@@ -214,8 +219,8 @@ async function streamChatCompletions(upstream, emitter) {
 }
 
 // Azure /openai/responses SSE streaming (Responses API event format).
-async function streamResponsesApi(upstream, emitter) {
-  for await (const evt of iterSSE(upstream)) {
+async function streamResponsesApi(upstream, emitter, idleTimeoutMs) {
+  for await (const evt of iterSSE(upstream, idleTimeoutMs)) {
     if (!evt.type) {
       // Fallback: treat as chat completions event if it has choices
       if (evt.choices) {
