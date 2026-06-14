@@ -37,13 +37,12 @@ function anthropicToOpenAIMessages(body) {
           function: { name: block.name, arguments: JSON.stringify(block.input || {}) }
         });
       } else if (block.type === 'tool_result') {
-        out.push({
-          role: 'tool',
-          tool_call_id: block.tool_use_id,
-          content: typeof block.content === 'string'
-            ? block.content
-            : (block.content || []).map(c => c.text || '').join('\n')
-        });
+        const rawContent = typeof block.content === 'string'
+          ? block.content
+          : (block.content || []).map(c => c.text || c.data || '').join('\n');
+        // Prefix error results so non-Claude models know the tool call failed.
+        const content = block.is_error ? `[Tool error] ${rawContent}` : rawContent;
+        out.push({ role: 'tool', tool_call_id: block.tool_use_id, content });
       } else if (block.type === 'image' && block.source) {
         // OpenAI-style multimodal
         const url = block.source.type === 'base64'
@@ -69,10 +68,81 @@ function anthropicToOpenAIMessages(body) {
   return out;
 }
 
-// Claude Code internal tool names that only work with Claude models (UI commands).
-// Forwarding them to non-Claude models causes those models to call them and get
-// "UI command" errors back from Claude Code, causing the session to get stuck.
-const CLAUDE_CODE_INTERNAL_TOOLS = new Set(['Skill']);
+// Claude Code internal tool names that only work with Claude models (UI commands or
+// computer-use primitives). Forwarding them to non-Claude models either causes
+// "UI command" errors (Skill) or nonsensical tool calls (computer).
+const CLAUDE_CODE_INTERNAL_TOOLS = new Set(['Skill', 'computer']);
+
+// Anthropic-specific request fields that OpenAI-compatible APIs reject with 400.
+const ANTHROPIC_ONLY_FIELDS = new Set([
+  'betas',        // beta feature flags array
+  'metadata',     // user_id / session metadata
+  'top_k',        // not in OpenAI spec
+  'service_tier', // Anthropic infra routing
+]);
+
+// Strip every field and nested structure that only Anthropic's own API understands
+// before forwarding to Azure / NVIDIA / other OpenAI-compatible endpoints.
+function sanitizeForUpstream(body) {
+  const out = { ...body };
+
+  // Drop Anthropic-only root fields
+  for (const f of ANTHROPIC_ONLY_FIELDS) delete out[f];
+
+  // thinking: type='disabled' → drop entirely.
+  // type='adaptive'           → normalize to {type:'enabled'} so NVIDIA translation works.
+  // type='enabled'            → keep as-is (budget_tokens handled downstream).
+  if (out.thinking) {
+    if (out.thinking.type === 'disabled') {
+      delete out.thinking;
+    } else if (out.thinking.type === 'adaptive') {
+      // Adaptive is the new Sonnet 4.6+ style; map to enabled with no budget for NVIDIA.
+      out.thinking = { type: 'enabled', budget_tokens: out.thinking.budget_tokens };
+      if (!out.thinking.budget_tokens) delete out.thinking.budget_tokens;
+    } else if (out.thinking.type === 'enabled') {
+      // Drop display hint — not relevant for non-Claude models.
+      if (out.thinking.display != null) {
+        out.thinking = { ...out.thinking };
+        delete out.thinking.display;
+      }
+    }
+  }
+
+  // Strip cache_control from system blocks (array form).
+  if (Array.isArray(out.system)) {
+    out.system = out.system.map(blk => {
+      if (!blk.cache_control) return blk;
+      const { cache_control: _, ...rest } = blk;
+      return rest;
+    });
+  }
+
+  // Sanitize message content blocks:
+  //  - strip cache_control
+  //  - drop redacted_thinking (Anthropic-signed; non-Claude models can't replay it)
+  //  - thinking blocks in assistant history: keep as text marker so the model has
+  //    context that reasoning happened, but don't forward the raw thinking block
+  //    (it confuses non-Claude models and leaks internal reasoning)
+  if (Array.isArray(out.messages)) {
+    out.messages = out.messages.map(msg => {
+      if (!Array.isArray(msg.content)) return msg;
+      const content = [];
+      for (const blk of msg.content) {
+        if (blk.type === 'redacted_thinking') continue; // drop silently
+        if (blk.type === 'thinking') continue;           // drop; reflected in text output
+        const { cache_control: _, ...clean } = blk;
+        content.push(clean);
+      }
+      if (content.length === 0 && msg.role === 'assistant') {
+        // Keep at least an empty text block so the message isn't invalid.
+        content.push({ type: 'text', text: '' });
+      }
+      return { ...msg, content };
+    });
+  }
+
+  return out;
+}
 
 function anthropicToolsToOpenAI(tools) {
   if (!tools) return undefined;
@@ -360,6 +430,7 @@ async function* iterSSE(response, idleTimeoutMs = 90000) {
 module.exports = {
   newId,
   CLAUDE_CODE_INTERNAL_TOOLS,
+  sanitizeForUpstream,
   anthropicToOpenAIMessages,
   anthropicToolsToOpenAI,
   createAnthropicSSEEmitter,

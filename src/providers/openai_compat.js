@@ -6,6 +6,7 @@ const {
   anthropicToOpenAIMessages,
   anthropicToolsToOpenAI,
   CLAUDE_CODE_INTERNAL_TOOLS,
+  sanitizeForUpstream,
   createAnthropicSSEEmitter,
   buildAnthropicResponse,
   iterSSE
@@ -45,6 +46,7 @@ function buildPayload(body, model, cfg, isResponsesApi) {
   // chat_template_kwargs.enable_thinking + reasoning_budget and stream the chain
   // of thought in delta.reasoning_content. Map Anthropic's thinking request onto
   // those NVIDIA-specific knobs. (These params are NIM-specific, so gate to nvidia.)
+  // sanitizeForUpstream normalises adaptive→enabled, so only check for 'enabled' here.
   if (cfg?.kind === 'nvidia' && body.thinking && body.thinking.type === 'enabled') {
     payload.chat_template_kwargs = { enable_thinking: true };
     if (body.thinking.budget_tokens != null) payload.reasoning_budget = body.thinking.budget_tokens;
@@ -132,6 +134,9 @@ function buildResponsesInput(body) {
 
 // providerCfg = { kind: 'azure'|'nvidia', endpoint, apiKey, model, apiVersion?, deployment? }
 async function callOpenAICompatible(providerCfg, body, res) {
+  // Strip Anthropic-only fields (betas, cache_control, redacted_thinking, etc.)
+  // before building the OpenAI-compatible payload.
+  body = sanitizeForUpstream(body);
   const cfg = providerCfg.kind === 'nvidia' ? resolveNvidiaConfig(providerCfg) : providerCfg;
   const { url, headers, isResponsesApi } = buildRequest(cfg);
   const payload = buildPayload(body, modelForUpstream(cfg), cfg, isResponsesApi);

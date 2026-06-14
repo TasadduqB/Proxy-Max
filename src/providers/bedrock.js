@@ -5,7 +5,8 @@
 const crypto = require('crypto');
 const {
   createAnthropicSSEEmitter,
-  buildAnthropicResponse
+  buildAnthropicResponse,
+  sanitizeForUpstream
 } = require('./_common');
 
 function hmac(key, str) { return crypto.createHmac('sha256', key).update(str).digest(); }
@@ -58,11 +59,12 @@ function buildBedrockPayload(body) {
     system: body.system,
     temperature: body.temperature,
     top_p: body.top_p,
-    top_k: body.top_k,
     stop_sequences: body.stop_sequences,
     tools: body.tools,
     tool_choice: body.tool_choice
   };
+  // Bedrock supports extended thinking natively.
+  if (body.thinking && body.thinking.type === 'enabled') payload.thinking = body.thinking;
   for (const k of Object.keys(payload)) if (payload[k] === undefined) delete payload[k];
   return payload;
 }
@@ -133,6 +135,9 @@ async function* iterEventStream(response) {
 }
 
 async function callBedrock(cfg, body, res) {
+  // Bedrock uses native Anthropic format but doesn't support betas / cache_control /
+  // redacted_thinking. Strip them to avoid upstream 400s.
+  body = sanitizeForUpstream(body);
   const region = cfg.region || 'us-east-1';
   const accessKeyId = cfg.accessKeyId || process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = cfg.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY;
