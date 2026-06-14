@@ -54,9 +54,14 @@ function anthropicToOpenAIMessages(body) {
     }
     if (parts.length || toolCalls.length) {
       const msg = { role };
-      const allText = parts.every(p => typeof p === 'string');
-      msg.content = allText ? parts.join('\n') : parts.map(p =>
-        typeof p === 'string' ? { type: 'text', text: p } : p);
+      if (parts.length > 0) {
+        const allText = parts.every(p => typeof p === 'string');
+        msg.content = allText ? parts.join('\n') : parts.map(p =>
+          typeof p === 'string' ? { type: 'text', text: p } : p);
+      } else {
+        // OpenAI spec: content must be null (not "") when only tool_calls are present.
+        msg.content = null;
+      }
       if (toolCalls.length) msg.tool_calls = toolCalls;
       out.push(msg);
     }

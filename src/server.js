@@ -444,6 +444,27 @@ function handlePanelResetPost(_req, res) {
   return send(res, 200, { ok: true });
 }
 
+function handleLaunchCommand(_req, res) {
+  const port = parseInt(process.env.PORT || '8787', 10);
+  const host = process.env.HOST || '127.0.0.1';
+  const base = `http://${host}:${port}`;
+  const claudePath = installer.detectClaude();
+  const claudeCmd = claudePath || 'claude';
+  const platform = process.platform;
+
+  const unix   = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\n${claudeCmd}`;
+  const ps     = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\n${claudeCmd}`;
+  const wincmd = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && ${claudeCmd}`;
+
+  send(res, 200, {
+    platform,
+    claudeInstalled: !!claudePath,
+    claudePath: claudePath || null,
+    base,
+    commands: { unix, ps, wincmd }
+  });
+}
+
 function serveStatic(req, res) {
   let p = new URL(req.url, 'http://localhost').pathname;
   if (p === '/' || p === '/ui') p = '/ui/index.html';
@@ -477,6 +498,7 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/panel/summary' && req.method === 'GET') return handlePanelSummaryGet(req, res);
     if (u.pathname === '/api/panel/reset' && req.method === 'POST') return handlePanelResetPost(req, res);
     if (u.pathname === '/api/health') return send(res, 200, { ok: true, provider: CONFIG.provider, model: activeProviderConfig()?.model });
+    if (u.pathname === '/api/launch/command' && req.method === 'GET') return handleLaunchCommand(req, res);
     if (u.pathname === '/api/reload') { CONFIG = loadConfig(); return send(res, 200, { ok: true }); }
     return serveStatic(req, res);
   } catch (err) {

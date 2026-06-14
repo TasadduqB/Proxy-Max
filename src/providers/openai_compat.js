@@ -335,9 +335,14 @@ function buildRequest(cfg) {
 
     let url, isResponsesApi = false;
     if (isFullPath) {
-      // Endpoint already has the full path — just append api-version.
-      const sep = endpoint.includes('?') ? '&' : '?';
-      url = `${endpoint}${sep}api-version=${encodeURIComponent(apiVersion)}`;
+      // Endpoint already has the full path. Append api-version only if not already present.
+      const alreadyHasVersion = /[?&]api-version=/.test(endpoint);
+      if (alreadyHasVersion) {
+        url = endpoint;
+      } else {
+        const sep = endpoint.includes('?') ? '&' : '?';
+        url = `${endpoint}${sep}api-version=${encodeURIComponent(apiVersion)}`;
+      }
       isResponsesApi = pathname.includes('/openai/responses');
     } else if (cfg.deployment) {
       url = `${endpoint}/openai/deployments/${encodeURIComponent(cfg.deployment)}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
