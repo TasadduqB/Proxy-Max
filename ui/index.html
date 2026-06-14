@@ -252,6 +252,27 @@
   .launch-strip.warn { border-color:rgba(255,181,71,.3);  background:rgba(255,181,71,.06);  }
   .launch-strip.warn .ic { background:rgba(255,181,71,.15); color:var(--warn); }
 
+  /* ── Pool ── */
+  .pool-row {
+    display:flex; align-items:center; gap:10px; padding:9px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .pool-row:last-child { border-bottom:0; }
+  .pool-prov {
+    width:22px; height:22px; border-radius:5px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:800; color:#fff;
+  }
+  .pool-prov.bedrock { background:var(--bedrock); }
+  .pool-prov.azure   { background:var(--azure);   }
+  .pool-prov.nvidia  { background:var(--nvidia);  }
+  .pool-info { flex:1; min-width:0; }
+  .pool-label { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pool-model { font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .pool-stat  { font-size:11px; color:var(--mute); white-space:nowrap; flex-shrink:0; }
+  .btn-remove { background:none; border:none; color:var(--err); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; opacity:.7; }
+  .btn-remove:hover { opacity:1; }
+
   @media (max-width:860px) {
     .app { grid-template-columns: 1fr; }
     aside { position:relative; height:auto; border-right:0; border-bottom:1px solid var(--line); }
@@ -276,6 +297,10 @@
       <div class="navitem active" data-view="provider">
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         Provider
+      </div>
+      <div class="navitem" data-view="pool">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Model Pool
       </div>
       <div class="navitem" data-view="models">
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6"/><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
@@ -481,6 +506,51 @@
       </div>
     </section>
 
+    <!-- ══ POOL VIEW ══ -->
+    <section class="view" data-view="pool">
+      <div class="topbar">
+        <div>
+          <h1>Model Pool</h1>
+          <div class="sub">Wire up multiple models across any provider. Requests round-robin across all members with automatic fallback on failure.</div>
+        </div>
+        <div class="pills" id="poolPills">
+          <span class="pill" id="poolSizePill"><span class="dot"></span>0 models</span>
+          <span class="pill" id="poolRRPill">rr: 0</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Pool members</h3>
+        <div id="poolList"><div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div></div>
+      </div>
+
+      <div class="card">
+        <h3>Add model to pool</h3>
+        <div class="grid2">
+          <div>
+            <label>Provider</label>
+            <select id="poolProvider" onchange="poolProviderChanged()">
+              <option value="nvidia">NVIDIA NIM</option>
+              <option value="azure">Azure AI Foundry</option>
+              <option value="bedrock">AWS Bedrock</option>
+            </select>
+          </div>
+          <div>
+            <label>Model ID</label>
+            <input id="poolModel" list="poolModelList" placeholder="e.g. nvidia/llama-3.1-nemotron-ultra-253b-v1" />
+            <datalist id="poolModelList"></datalist>
+          </div>
+        </div>
+        <label style="margin-top:10px">Label <span class="small">(optional — shown in logs)</span></label>
+        <input id="poolLabel" placeholder="e.g. Nemotron Ultra" />
+        <div id="poolProviderWarn" class="small warn hide" style="margin-top:8px">⚠ This provider has no saved credentials. Configure it on the Provider page first.</div>
+        <div class="actions">
+          <button class="btn" onclick="addToPool()">Add to pool</button>
+          <span id="poolAddResult" class="small"></span>
+        </div>
+      </div>
+    </section>
+
     <!-- ══ MODELS VIEW ══ -->
     <section class="view" data-view="models">
       <div class="topbar">
@@ -669,6 +739,7 @@ function toast(msg, ok=true) {
 }
 
 // ── Routing ──
+let _poolTimer = null;
 function navTo(view) {
   for (const el of document.querySelectorAll('.navitem')) el.classList.toggle('active', el.dataset.view === view);
   for (const el of document.querySelectorAll('.view'))    el.classList.toggle('active', el.dataset.view === view);
@@ -676,6 +747,12 @@ function navTo(view) {
   if (view === 'models') renderModelsBrowser();
   if (view === 'logs')   refreshPanelTest();
   if (view === 'launch') renderLaunchPage();
+  if (view === 'pool') {
+    loadPool();
+    if (!_poolTimer) _poolTimer = setInterval(loadPool, 5000);
+  } else {
+    clearInterval(_poolTimer); _poolTimer = null;
+  }
 }
 document.addEventListener('click', e => {
   const ni = e.target.closest('.navitem'); if (ni) navTo(ni.dataset.view);
@@ -716,6 +793,7 @@ async function loadAll() {
   setHealth(h);
   if (l) applyLimits(l);
   if (c.provider) selectProvider(c.provider);
+  poolProviderChanged(); // pre-populate datalist for pool form
   await loadLaunchInfo();
 }
 
@@ -827,7 +905,10 @@ powershell -ExecutionPolicy Bypass -File .\\bootstrap.ps1 --claude`;
 // ── Health ──
 function setHealth(h) {
   const el = $('#health'); const v = $('#healthValue');
-  if (h.provider && h.model) {
+  if (h.poolMode && h.poolSize > 0) {
+    el.classList.remove('warn'); el.classList.add('ok');
+    v.textContent = `pool: ${h.poolSize} model${h.poolSize !== 1 ? 's' : ''}`;
+  } else if (h.provider && h.model) {
     el.classList.remove('warn'); el.classList.add('ok');
     v.textContent = `${h.provider} · ${h.model}`;
   } else {
@@ -1146,6 +1227,95 @@ async function runInstall(what) {
       }
     }
   }
+}
+
+// ── Model Pool ──
+let _poolData = { pool: [], rrIndex: 0 };
+
+async function loadPool() {
+  try {
+    _poolData = await fetch('/api/pool').then(r => r.json());
+    renderPool(_poolData);
+  } catch {}
+}
+
+function renderPool(data) {
+  const pool = data.pool || [];
+  const list = $('#poolList');
+  const sizeEl = $('#poolSizePill'); if (sizeEl) sizeEl.innerHTML = `<span class="dot" style="background:${pool.length>0?'var(--ok)':'var(--mute)'}"></span>${pool.length} model${pool.length!==1?'s':''}`;
+  const rrEl = $('#poolRRPill'); if (rrEl) rrEl.textContent = `rr: ${data.rrIndex ?? 0}`;
+  if (!list) return;
+  if (pool.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div>';
+    return;
+  }
+  const provAbbr = { nvidia:'N', azure:'A', bedrock:'B' };
+  list.innerHTML = pool.map((e, i) => {
+    const s = e.stats || { req:0, err:0, lastMs:0 };
+    const errPct = s.req > 0 ? Math.round(s.err / s.req * 100) : 0;
+    const statStr = `${s.req} req · ${s.err} err${s.req>0?' · '+s.lastMs+'ms':''}`;
+    return `<div class="pool-row">
+      <div class="pool-prov ${e.provider}">${provAbbr[e.provider]||'?'}</div>
+      <div class="pool-info">
+        <div class="pool-label">${escapeHtml(e.label || e.model)}</div>
+        <div class="pool-model">${escapeHtml(e.model)}</div>
+      </div>
+      <span class="pool-stat ${s.err>0&&errPct>0?'warn':''}">${escapeHtml(statStr)}</span>
+      <button class="btn-remove" data-pool-idx="${i}" title="Remove">×</button>
+    </div>`;
+  }).join('');
+  for (const btn of list.querySelectorAll('.btn-remove')) {
+    btn.addEventListener('click', () => removeFromPool(Number(btn.dataset.poolIdx)));
+  }
+}
+
+function poolProviderChanged() {
+  const p = $('#poolProvider').value;
+  const dl = $('#poolModelList');
+  dl.innerHTML = '';
+  const groups = (state.models || {})[p] || [];
+  for (const g of groups) for (const m of g.models) {
+    const o = document.createElement('option'); o.value = m.id; dl.appendChild(o);
+  }
+  const saved = (state.config.providers || {})[p] || {};
+  const warn = $('#poolProviderWarn');
+  if (warn) warn.classList.toggle('hide', !!(saved.apiKey || saved.accessKeyId));
+}
+
+async function addToPool() {
+  const provider = $('#poolProvider').value;
+  const model = ($('#poolModel').value || '').trim();
+  const label = ($('#poolLabel').value || '').trim() || null;
+  const result = $('#poolAddResult');
+  if (!model) { if (result) result.innerHTML = '<span class="err">Enter a model ID</span>'; return; }
+  const current = (_poolData.pool || []).map(e => ({ provider: e.provider, model: e.model, label: e.label || null }));
+  if (current.some(e => e.provider === provider && e.model === model)) {
+    if (result) result.innerHTML = '<span class="warn">Already in pool</span>'; return;
+  }
+  const updated = [...current, { provider, model, label }];
+  if (result) result.innerHTML = '<span class="small">saving…</span>';
+  try {
+    const r = await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: updated }) });
+    const j = await r.json();
+    if (r.ok) {
+      if (result) result.innerHTML = '<span class="ok">✓ added</span>';
+      $('#poolModel').value = ''; $('#poolLabel').value = '';
+      await loadPool();
+      const h = await fetch('/api/health').then(r=>r.json());
+      setHealth(h);
+    } else { if (result) result.innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>'; }
+  } catch (e) { if (result) result.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+}
+
+async function removeFromPool(idx) {
+  const current = (_poolData.pool || []).map(e => ({ provider: e.provider, model: e.model, label: e.label || null }));
+  current.splice(idx, 1);
+  try {
+    await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: current }) });
+    await loadPool();
+    const h = await fetch('/api/health').then(r=>r.json());
+    setHealth(h);
+  } catch {}
 }
 
 $('#refreshSys').addEventListener('click', refreshSystem);

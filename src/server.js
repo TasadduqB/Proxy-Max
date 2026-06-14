@@ -69,6 +69,29 @@ function activeProviderConfig() {
   return { kind, ...p };
 }
 
+// ---- Model pool (round-robin + fallback) ----
+
+let poolRR = 0;
+const poolStats = new Map(); // `${provider}::${model}` → { req, err, lastMs }
+
+function getPool() {
+  const raw = CONFIG.pool;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    const cfg = activeProviderConfig();
+    return cfg ? [{ ...cfg, _key: `${cfg.kind}::${cfg.model}` }] : [];
+  }
+  return raw.map(entry => {
+    const provCfg = (CONFIG.providers || {})[entry.provider] || {};
+    return {
+      kind: entry.provider,
+      ...provCfg,
+      model: entry.model,
+      label: entry.label || `${entry.provider} / ${entry.model}`,
+      _key: `${entry.provider}::${entry.model}`
+    };
+  }).filter(e => e.kind && e.model);
+}
+
 // ---- Rate limiting (sliding 60s window for requests + tokens) ----
 
 const DEFAULT_LIMITS = { enabled: true, rpm: 10000, tpm: 1000000 };
@@ -136,11 +159,11 @@ function sniffUsage(res, onUsage) {
 }
 
 async function handleMessages(req, res) {
-  const cfg = activeProviderConfig();
-  if (!cfg || !cfg.model) {
+  const pool = getPool();
+  if (pool.length === 0) {
     return send(res, 503, {
       type: 'error',
-      error: { type: 'configuration_error', message: 'Proxy not configured. Open the UI and pick a provider/model.' }
+      error: { type: 'configuration_error', message: 'No models configured. Open the UI and set up a provider / model pool.' }
     });
   }
 
@@ -166,22 +189,46 @@ async function handleMessages(req, res) {
   try { body = await readJSONBody(req); }
   catch { return send(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'Bad JSON' } }); }
 
-  // The CLI sends its own model id; we always route to the configured one.
-  body.model = cfg.model;
+  // Round-robin + fallback: try each pool member in order starting from poolRR.
+  const startIdx = poolRR;
+  for (let attempt = 0; attempt < pool.length; attempt++) {
+    const idx = (startIdx + attempt) % pool.length;
+    const cfg = pool[idx];
+    const key = cfg._key;
+    if (!poolStats.has(key)) poolStats.set(key, { req: 0, err: 0, lastMs: 0 });
+    const stat = poolStats.get(key);
 
-  try {
-    if (cfg.kind === 'bedrock') {
-      await callBedrock(cfg, body, res);
-    } else {
-      await callOpenAICompatible(cfg, body, res);
+    body.model = cfg.model;
+    stat.req++;
+    const t0 = Date.now();
+
+    try {
+      if (cfg.kind === 'bedrock') await callBedrock(cfg, body, res);
+      else await callOpenAICompatible(cfg, body, res);
+      stat.lastMs = Date.now() - t0;
+      poolRR = (idx + 1) % pool.length; // advance past successful entry
+      return;
+    } catch (err) {
+      stat.err++;
+      stat.lastMs = Date.now() - t0;
+
+      if (res.headersSent) {
+        // Streaming started — cannot fall back; close whatever was sent.
+        console.error(`[proxy] [pool] ${cfg.label} failed mid-stream: ${err.message}`);
+        try { res.end(); } catch {}
+        return;
+      }
+
+      if (attempt < pool.length - 1) {
+        console.warn(`[proxy] [pool] ${cfg.label} failed (${err.message.slice(0, 100)}), trying next…`);
+      } else {
+        console.error(`[proxy] [pool] all ${pool.length} member(s) failed. Last: ${err.message}`);
+        send(res, 502, {
+          type: 'error',
+          error: { type: 'api_error', message: `All pool members failed. Last error: ${err.message}` }
+        });
+      }
     }
-  } catch (err) {
-    if (!res.headersSent) {
-      send(res, 502, { type: 'error', error: { type: 'api_error', message: String(err.message || err) } });
-    } else {
-      try { res.end(); } catch {}
-    }
-    console.error('[proxy] error:', err.message);
   }
 }
 
@@ -465,6 +512,24 @@ function handleLaunchCommand(_req, res) {
   });
 }
 
+function handlePoolGet(_req, res) {
+  const pool = (CONFIG.pool || []).map(e => ({
+    ...e,
+    stats: poolStats.get(`${e.provider}::${e.model}`) || { req: 0, err: 0, lastMs: 0 }
+  }));
+  send(res, 200, { pool, rrIndex: poolRR, size: pool.length });
+}
+
+async function handlePoolPost(req, res) {
+  const body = await readJSONBody(req);
+  if (!Array.isArray(body.pool)) return send(res, 400, { error: 'pool must be an array' });
+  CONFIG.pool = body.pool
+    .map(e => ({ provider: e.provider, model: e.model, label: e.label || null }))
+    .filter(e => e.provider && e.model);
+  saveConfig(CONFIG);
+  send(res, 200, { ok: true, pool: CONFIG.pool });
+}
+
 function serveStatic(req, res) {
   let p = new URL(req.url, 'http://localhost').pathname;
   if (p === '/' || p === '/ui') p = '/ui/index.html';
@@ -497,7 +562,20 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/panel/events' && req.method === 'GET') return handlePanelEventsGet(req, res);
     if (u.pathname === '/api/panel/summary' && req.method === 'GET') return handlePanelSummaryGet(req, res);
     if (u.pathname === '/api/panel/reset' && req.method === 'POST') return handlePanelResetPost(req, res);
-    if (u.pathname === '/api/health') return send(res, 200, { ok: true, provider: CONFIG.provider, model: activeProviderConfig()?.model });
+    if (u.pathname === '/api/pool' && req.method === 'GET') return handlePoolGet(req, res);
+    if (u.pathname === '/api/pool' && req.method === 'POST') return await handlePoolPost(req, res);
+    if (u.pathname === '/api/health') {
+      const pool = getPool();
+      const poolMode = Array.isArray(CONFIG.pool) && CONFIG.pool.length > 0;
+      return send(res, 200, {
+        ok: true,
+        provider: CONFIG.provider,
+        model: activeProviderConfig()?.model,
+        poolMode,
+        poolSize: poolMode ? CONFIG.pool.length : 0,
+        poolActive: [...poolStats.values()].filter(s => s.req > 0).length
+      });
+    }
     if (u.pathname === '/api/launch/command' && req.method === 'GET') return handleLaunchCommand(req, res);
     if (u.pathname === '/api/reload') { CONFIG = loadConfig(); return send(res, 200, { ok: true }); }
     return serveStatic(req, res);
