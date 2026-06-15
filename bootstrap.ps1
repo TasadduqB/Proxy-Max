@@ -72,6 +72,10 @@ try { Invoke-WebRequest -Uri "http://${Host_}:${Port}/api/health" -TimeoutSec 1 
 if (-not $alive) {
   Write-Host "[bootstrap] starting proxy on http://${Host_}:${Port}"
   $env:PORT = $Port; $env:HOST = $Host_
+  # PROXY_INSECURE=1 bypasses TLS cert verification — needed on networks with SSL inspection
+  # (corporate proxies that inject a self-signed cert, causing SELF_SIGNED_CERT_IN_CHAIN errors).
+  # Set $env:PROXY_INSECURE = "1" before running bootstrap.ps1 to enable.
+  if ($env:PROXY_INSECURE) { $env:PROXY_INSECURE = $env:PROXY_INSECURE }
   Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "$Here\src\server.js" `
     -RedirectStandardOutput (Join-Path $ProxyHome "server.log") `
     -RedirectStandardError  (Join-Path $ProxyHome "server.err.log")
@@ -88,6 +92,9 @@ Write-Host "    `$env:ANTHROPIC_BASE_URL = 'http://${Host_}:${Port}'"
 Write-Host "    `$env:ANTHROPIC_AUTH_TOKEN = 'proxy-max'"
 Write-Host "    `$env:ANTHROPIC_API_KEY = 'proxy-max'"
 Write-Host "    claude --dangerously-skip-permissions"
+Write-Host ""
+Write-Host "  TIP: If you get 'fetch failed' / SELF_SIGNED_CERT_IN_CHAIN (corporate SSL proxy):"
+Write-Host "    `$env:PROXY_INSECURE = '1'; .\bootstrap.ps1"
 Write-Host ""
 
 if ($args.Count -gt 0 -and ($args[0] -eq "--claude" -or $args[0])) {
