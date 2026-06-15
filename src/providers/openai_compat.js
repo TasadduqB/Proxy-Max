@@ -16,6 +16,31 @@ function getInsecureDispatcher() {
 }
 const ALLOW_INSECURE = process.env.PROXY_INSECURE === '1' || process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0';
 
+// TLS error codes thrown by Node.js/undici when a corporate SSL inspection proxy
+// injects a self-signed cert into the chain.
+const CERT_ERROR_CODES = new Set([
+  'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID',
+  'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY'
+]);
+function isCertError(err) {
+  const code = err?.cause?.code || err?.code || '';
+  return CERT_ERROR_CODES.has(code);
+}
+
+// Fetch with automatic insecure retry on TLS cert errors.
+async function fetchWithCertFallback(url, opts) {
+  try {
+    return await fetch(url, opts);
+  } catch (err) {
+    if (!isCertError(err)) throw err;
+    const dispatcher = getInsecureDispatcher();
+    if (!dispatcher) throw err;
+    console.warn(`[proxy] TLS cert error (${err?.cause?.code}) — retrying with rejectUnauthorized=false for ${url}`);
+    return await fetch(url, { ...opts, dispatcher });
+  }
+}
+
 const {
   anthropicToOpenAIMessages,
   anthropicToolsToOpenAI,
@@ -380,7 +405,7 @@ async function callWithWebSearchLoop(providerCfg, sanitizedBody, originalBody, r
     const timer = setTimeout(() => controller.abort(), connectTimeoutMs);
     let upstream;
     try {
-      upstream = await fetch(url, {
+      upstream = await fetchWithCertFallback(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify(payloadNonStream),
@@ -496,7 +521,7 @@ async function callOpenAICompatible(providerCfg, body, res) {
 
   let upstream;
   try {
-    upstream = await fetch(url, {
+    upstream = await fetchWithCertFallback(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(payload),
