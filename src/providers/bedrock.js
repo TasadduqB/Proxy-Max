@@ -135,9 +135,9 @@ async function* iterEventStream(response) {
 }
 
 async function callBedrock(cfg, body, res) {
-  // Bedrock uses native Anthropic format but doesn't support betas / cache_control /
-  // redacted_thinking. Strip them to avoid upstream 400s.
-  body = sanitizeForUpstream(body);
+  // Bedrock uses native Anthropic format but doesn't support betas / redacted_thinking.
+  // We preserve cache_control here so Bedrock can take advantage of prompt caching if supported.
+  body = sanitizeForUpstream(body, { preserveCacheControl: true });
   const region = cfg.region || 'us-east-1';
   const accessKeyId = cfg.accessKeyId || process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = cfg.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY;
@@ -165,14 +165,30 @@ async function callBedrock(cfg, body, res) {
   const upstream = await fetch(url, { method: 'POST', headers, body: payload });
   if (!upstream.ok) {
     const errText = await upstream.text();
-    throw new Error(`Bedrock ${upstream.status}: ${errText.slice(0, 600)}`);
+    const err = new Error(`Bedrock ${upstream.status}: ${errText.slice(0, 600)}`);
+    err.status = upstream.status;
+    err.contentType = upstream.headers.get('content-type') || null;
+    err.stage = 'upstream-response';
+    err.debug = { responsePreview: errText.slice(0, 2000) };
+    throw err;
   }
 
   if (!stream) {
-    const json = await upstream.json();
+    const raw = await upstream.text();
+    let json;
+    try {
+      json = raw ? JSON.parse(raw) : {};
+    } catch (parseErr) {
+      const err = new Error(`Bedrock invalid JSON: ${parseErr.message}`);
+      err.status = upstream.status;
+      err.contentType = upstream.headers.get('content-type') || null;
+      err.stage = 'non-stream-json';
+      err.debug = { responsePreview: raw.slice(0, 2000) };
+      throw err;
+    }
     res.setHeader('Content-Type', 'application/json');
     // Bedrock returns a near-Anthropic message; ensure model field reflects the requested id.
-    json.model = cfg.model;
+    json.model = body._requestedModel || cfg.model;
     res.end(JSON.stringify(json));
     return;
   }
@@ -189,12 +205,20 @@ async function callBedrock(cfg, body, res) {
       const evtType = frame.headers[':event-type'];
       if (evtType === 'chunk') {
         let inner;
-        try { inner = JSON.parse(frame.payload.toString('utf8')); } catch { continue; }
+        try { inner = JSON.parse(frame.payload.toString('utf8')); }
+        catch (parseErr) {
+          console.warn(`[proxy] [bedrock][chunk] invalid JSON: ${frame.payload.toString('utf8').slice(0, 200)} (${parseErr.message})`);
+          continue;
+        }
         if (inner.bytes) {
           const decoded = Buffer.from(inner.bytes, 'base64').toString('utf8');
           let evt;
-          try { evt = JSON.parse(decoded); } catch { continue; }
-          if (evt.type === 'message_start' && evt.message) evt.message.model = cfg.model;
+          try { evt = JSON.parse(decoded); }
+          catch (parseErr) {
+            console.warn(`[proxy] [bedrock][event] invalid JSON: ${decoded.slice(0, 200)} (${parseErr.message})`);
+            continue;
+          }
+          if (evt.type === 'message_start' && evt.message) evt.message.model = body._requestedModel || cfg.model;
           res.write(`event: ${evt.type}\n`);
           res.write(`data: ${JSON.stringify(evt)}\n\n`);
         }
@@ -206,6 +230,24 @@ async function callBedrock(cfg, body, res) {
       }
     }
   } catch (err) {
+    if (res.__proxyTrace) {
+      res.__proxyTrace.note({
+        streamError: {
+          name: err.name || 'Error',
+          message: String(err.message || err)
+        }
+      });
+      res.__proxyTrace.finalize('mid-stream-err', {
+        error: {
+          name: err.name || 'Error',
+          message: String(err.message || err)
+        },
+        stage: err.stage || 'stream',
+        upstreamUrl: url,
+        contentType: upstream.headers.get('content-type') || null,
+        responsePreview: err.debug?.responsePreview || null
+      });
+    }
     res.write(`event: error\ndata: ${JSON.stringify({
       type: 'error', error: { type: 'api_error', message: String(err.message || err) }
     })}\n\n`);

@@ -199,6 +199,11 @@ function detectClaude() {
   return null;
 }
 
+function detectPython() {
+  const p = which('python') || which('python3');
+  return p;
+}
+
 async function ensureClaude(npmBin) {
   const found = detectClaude();
   if (found) return found;
@@ -269,4 +274,4 @@ if (require.main === module) {
   main().catch(err => { warn(err.stack || err.message); process.exit(1); });
 }
 
-module.exports = { detectNode, detectClaude, ensureNode, ensureClaude, which, doctor, ROOT, NPM_PREFIX, NODE_DIR };
+module.exports = { detectNode, detectClaude, detectPython, ensureNode, ensureClaude, which, doctor, ROOT, NPM_PREFIX, NODE_DIR };

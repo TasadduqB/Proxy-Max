@@ -923,9 +923,9 @@ function renderLaunchPage() {
     const w = $('#cmdWin');  if (w) w.textContent = info.commands.ps;
     const c = $('#cmdWinCmd'); if (c) c.textContent = info.commands.wincmd;
   } else {
-    const unix = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\nclaude`;
-    const ps   = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\nclaude`;
-    const cmd  = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && claude`;
+    const unix = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\nexport ANTHROPIC_API_KEY="proxy-max"\nclaude --dangerously-skip-permissions`;
+    const ps   = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\n$env:ANTHROPIC_API_KEY = "proxy-max"\nclaude --dangerously-skip-permissions`;
+    const cmd  = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && set ANTHROPIC_API_KEY=proxy-max && claude --dangerously-skip-permissions`;
     const u = $('#cmdUnix'); if (u) u.textContent = unix;
     const w = $('#cmdWin');  if (w) w.textContent = ps;
     const c = $('#cmdWinCmd'); if (c) c.textContent = cmd;
@@ -1178,7 +1178,8 @@ async function refreshSystem() {
   for (const [name, key, ic, hint] of [
     ['Node.js',       'node',   'N', 'Required to run this proxy.'],
     ['npm',           'npm',    'n', 'Used to install the Anthropic CLI.'],
-    ['Anthropic CLI', 'claude', 'C', 'The claude binary this proxy translates for.']
+    ['Anthropic CLI', 'claude', 'C', 'The claude binary this proxy translates for.'],
+    ['Python',        'python', 'P', 'Required for Claude Code stop hooks.']
   ]) {
     const c = sys.components[key]; const ok = !!c.ok;
     checks.insertAdjacentHTML('beforeend', `<div class="check ${ok?'ok':'bad'}">

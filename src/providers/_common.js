@@ -29,17 +29,30 @@ function anthropicToOpenAIMessages(body) {
     const parts = [];
     const toolCalls = [];
     for (const block of m.content || []) {
-      if (block.type === 'text') parts.push(block.text);
-      else if (block.type === 'tool_use') {
+      if (block.type === 'text') {
+        // Skip empty text blocks (can appear after thinking-only turns are sanitized).
+        if (block.text) parts.push(block.text);
+      } else if (block.type === 'tool_use' || block.type === 'server_tool_use') {
+        // server_tool_use = Anthropic server-executed tool (e.g. web_search via native API).
+        // Treat it the same as tool_use when it appears in conversation history.
         toolCalls.push({
           id: block.id,
           type: 'function',
           function: { name: block.name, arguments: JSON.stringify(block.input || {}) }
         });
       } else if (block.type === 'tool_result') {
-        const rawContent = typeof block.content === 'string'
-          ? block.content
-          : (block.content || []).map(c => c.text || c.data || '').join('\n');
+        let rawContent;
+        if (typeof block.content === 'string') {
+          rawContent = block.content;
+        } else {
+          rawContent = (block.content || []).map(c => {
+            if (c.type === 'web_search_result' || c.type === 'web_search_tool_result') {
+              // Anthropic web_search result blocks: render as a readable citation.
+              return `[${c.title || 'Result'}](${c.url || ''}): ${c.encrypted_content ? '(encrypted)' : (c.text || '')}`;
+            }
+            return c.text || c.data || '';
+          }).join('\n');
+        }
         // Prefix error results so non-Claude models know the tool call failed.
         const content = block.is_error ? `[Tool error] ${rawContent}` : rawContent;
         out.push({ role: 'tool', tool_call_id: block.tool_use_id, content });
@@ -49,6 +62,32 @@ function anthropicToOpenAIMessages(body) {
           ? `data:${block.source.media_type};base64,${block.source.data}`
           : block.source.url;
         parts.push({ type: 'image_url', image_url: { url } });
+      } else if (block.type === 'document' && block.source) {
+        // Non-Anthropic APIs don't have native document support.
+        // Convert to a text representation, preserving title and context.
+        const titlePart = block.title ? `[Document: ${block.title}]` : '[Document]';
+        const contextPart = block.context ? `\nContext: ${block.context}` : '';
+        if (block.source.type === 'text') {
+          parts.push(`${titlePart}\n${block.source.data}${contextPart}`);
+        } else if (block.source.type === 'base64' && block.source.media_type?.startsWith('text/')) {
+          try {
+            const decoded = Buffer.from(block.source.data, 'base64').toString('utf8');
+            parts.push(`${titlePart}\n${decoded}${contextPart}`);
+          } catch {
+            parts.push(titlePart + contextPart);
+          }
+        } else {
+          // Binary document (PDF, etc.) — content cannot be transcoded; preserve metadata only.
+          parts.push(titlePart + contextPart);
+        }
+      } else if (block.type === 'web_search_tool_result') {
+        // Anthropic native web_search returns these as top-level blocks in the assistant turn.
+        // Convert to readable text so the conversation history makes sense to non-Claude models.
+        const results = (block.content || []).map(r => {
+          if (r.encrypted_content) return `[Search result (encrypted)]`;
+          return `**${r.title || 'Result'}**\nURL: ${r.url || ''}\n${r.text || ''}`;
+        }).join('\n\n');
+        if (results) parts.push(`[Web Search Results]\n${results}`);
       }
     }
     if (parts.length || toolCalls.length) {
@@ -68,22 +107,72 @@ function anthropicToOpenAIMessages(body) {
   return out;
 }
 
-// Claude Code internal tool names that only work with Claude models (UI commands or
-// computer-use primitives). Forwarding them to non-Claude models either causes
-// "UI command" errors (Skill) or nonsensical tool calls (computer).
-const CLAUDE_CODE_INTERNAL_TOOLS = new Set(['Skill', 'computer']);
+// Descriptions for Anthropic built-in tools (no description field in the API payload).
+const BUILTIN_TOOL_DESCRIPTIONS = {
+  web_search:         'Search the internet for current information. Use when you need up-to-date facts, news, documentation, or any information not reliably in your training data. Always pass a concise, specific query.',
+  bash:               'Execute a bash shell command and return its stdout/stderr output. Use for file operations, running scripts, reading system state, or any shell task.',
+  str_replace_editor: 'View and edit files by replacing exact strings. Commands: view, create, str_replace, insert, undo_edit.',
+  computer:           'Control the computer screen, keyboard, and mouse for GUI automation.',
+};
+
+// Anthropic computer use tools don't come with an explicit input_schema.
+// If we pass them to OpenAI, we must inject their implicit schemas so the model knows how to call them.
+const COMPUTER_USE_SCHEMAS = {
+  'web_search_20250305': {
+    type: 'object',
+    required: ['query'],
+    properties: {
+      query: { type: 'string', description: 'The search query to execute. Be specific for best results.' }
+    },
+    additionalProperties: false
+  },
+  'bash_20241022': {
+    type: 'object',
+    properties: {
+      command: { type: 'string', description: 'The bash command to run. Required unless restart is true.' },
+      restart: { type: 'boolean', description: 'If true, restarts the tool state. Cannot be used with command.' }
+    },
+    additionalProperties: false
+  },
+  'text_editor_20241022': {
+    type: 'object',
+    required: ['command', 'path'],
+    properties: {
+      command: { type: 'string', enum: ['view', 'create', 'str_replace', 'insert', 'undo'], description: 'The command to run.' },
+      path: { type: 'string', description: 'Absolute path to file.' },
+      file_text: { type: 'string', description: 'Required for create.' },
+      insert_line: { type: 'integer', description: 'Required for insert.' },
+      new_str: { type: 'string' },
+      old_str: { type: 'string' },
+      view_range: { type: 'array', items: { type: 'integer' } }
+    },
+    additionalProperties: false
+  },
+  'computer_20241022': {
+    type: 'object',
+    required: ['action'],
+    properties: {
+      action: { type: 'string', enum: ['key', 'type', 'mouse_move', 'left_click', 'left_click_drag', 'right_click', 'middle_click', 'double_click', 'screenshot', 'cursor_position'] },
+      coordinate: { type: 'array', items: { type: 'integer' } },
+      text: { type: 'string' }
+    },
+    additionalProperties: false
+  }
+};
 
 // Anthropic-specific request fields that OpenAI-compatible APIs reject with 400.
 const ANTHROPIC_ONLY_FIELDS = new Set([
-  'betas',        // beta feature flags array
-  'metadata',     // user_id / session metadata
-  'top_k',        // not in OpenAI spec
-  'service_tier', // Anthropic infra routing
+  'betas',           // beta feature flags array
+  'metadata',        // user_id / session metadata
+  'top_k',           // not in OpenAI spec
+  'service_tier',    // Anthropic infra routing
+  '_requestedModel', // proxy-internal tracking field
 ]);
 
 // Strip every field and nested structure that only Anthropic's own API understands
 // before forwarding to Azure / NVIDIA / other OpenAI-compatible endpoints.
-function sanitizeForUpstream(body) {
+function sanitizeForUpstream(body, opts = {}) {
+  const { preserveCacheControl = false } = opts;
   const out = { ...body };
 
   // Drop Anthropic-only root fields
@@ -108,8 +197,8 @@ function sanitizeForUpstream(body) {
     }
   }
 
-  // Strip cache_control from system blocks (array form).
-  if (Array.isArray(out.system)) {
+  // Strip cache_control from system blocks (array form) unless preserved.
+  if (!preserveCacheControl && Array.isArray(out.system)) {
     out.system = out.system.map(blk => {
       if (!blk.cache_control) return blk;
       const { cache_control: _, ...rest } = blk;
@@ -130,8 +219,12 @@ function sanitizeForUpstream(body) {
       for (const blk of msg.content) {
         if (blk.type === 'redacted_thinking') continue; // drop silently
         if (blk.type === 'thinking') continue;           // drop; reflected in text output
-        const { cache_control: _, ...clean } = blk;
-        content.push(clean);
+        if (!preserveCacheControl && blk.cache_control) {
+          const { cache_control: _, ...clean } = blk;
+          content.push(clean);
+        } else {
+          content.push(blk);
+        }
       }
       if (content.length === 0 && msg.role === 'assistant') {
         // Keep at least an empty text block so the message isn't invalid.
@@ -144,18 +237,122 @@ function sanitizeForUpstream(body) {
   return out;
 }
 
+// Intercepts and parses simulated tool calls (plain text) into structured tool calls.
+function parseSimulatedTools(text) {
+  if (!text) return [];
+  const tools = [];
+  let match;
+
+  // Pattern 1: <tool_use><name>bash</name><input>{"command":"ls"}</input></tool_use>
+  const xmlRegex = /<tool_use>[\s\S]*?<name>(.*?)<\/name>[\s\S]*?(?:<input>([\s\S]*?)<\/input>|<([\w]+)>([\s\S]*?)<\/\3>)[\s\S]*?<\/tool_use>/g;
+  while ((match = xmlRegex.exec(text)) !== null) {
+    let argsStr = '{}';
+    if (match[2]) argsStr = match[2].trim();
+    else if (match[3] && match[4]) argsStr = JSON.stringify({ [match[3]]: match[4].trim() });
+    tools.push({ name: match[1].trim(), arguments: argsStr });
+  }
+
+  // Pattern 2: <tool_call>{"name":"bash","arguments":{...}}</tool_call>  (used by some models)
+  const toolCallRegex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+  while ((match = toolCallRegex.exec(text)) !== null) {
+    try {
+      const obj = JSON.parse(match[1]);
+      if (obj.name) {
+        const args = obj.arguments || obj.input || obj.params || {};
+        tools.push({ name: obj.name, arguments: typeof args === 'string' ? args : JSON.stringify(args) });
+      }
+    } catch {}
+  }
+
+  // Pattern 3: <function_calls><invoke name="bash"><command>ls</command></invoke></function_calls>
+  const fnCallsRegex = /<invoke\s+name="([^"]+)">([\s\S]*?)<\/invoke>/g;
+  while ((match = fnCallsRegex.exec(text)) !== null) {
+    const name = match[1];
+    const inner = match[2];
+    const params = {};
+    const paramRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+    let pm;
+    while ((pm = paramRegex.exec(inner)) !== null) params[pm[1]] = pm[2].trim();
+    tools.push({ name, arguments: JSON.stringify(params) });
+  }
+
+  // Pattern 4: ```json\n{ "name": "bash", "arguments": {...} }\n```
+  const mdJsonRegex = /```(?:json)?\s*(\{\s*"name"\s*:\s*"[^"]+"\s*(?:,\s*"(?:arguments|input|params)"\s*:\s*(?:\{[\s\S]*?\}|"[^"]*"))?\s*\})\s*```/g;
+  while ((match = mdJsonRegex.exec(text)) !== null) {
+    try {
+      const obj = JSON.parse(match[1]);
+      if (obj.name) {
+        const args = obj.arguments || obj.input || obj.params || {};
+        tools.push({ name: obj.name, arguments: typeof args === 'string' ? args : JSON.stringify(args) });
+      }
+    } catch {}
+  }
+
+  // Pattern 5: bare JSON at start of text {"name": "bash", "arguments": {...}}
+  const nakedJsonRegex = /^\{\s*"name"\s*:\s*"[^"]+"\s*(?:,\s*"(?:arguments|input|params)"\s*:\s*\{[\s\S]*?\})?\s*\}/m;
+  match = nakedJsonRegex.exec(text);
+  if (match) {
+    try {
+      const obj = JSON.parse(match[0]);
+      if (obj.name) {
+        const args = obj.arguments || obj.input || obj.params || {};
+        tools.push({ name: obj.name, arguments: typeof args === 'string' ? args : JSON.stringify(args) });
+      }
+    } catch {}
+  }
+
+  return tools;
+}
+
 function anthropicToolsToOpenAI(tools) {
-  if (!tools) return undefined;
-  const filtered = tools.filter(t => !CLAUDE_CODE_INTERNAL_TOOLS.has(t.name));
-  if (filtered.length === 0) return undefined;
-  return filtered.map(t => ({
+  if (!tools || tools.length === 0) return undefined;
+  return tools.map(t => ({
     type: 'function',
     function: {
       name: t.name,
-      description: t.description,
-      parameters: t.input_schema || { type: 'object', properties: {} }
+      description: t.description
+        || BUILTIN_TOOL_DESCRIPTIONS[t.name]
+        || `Tool: ${t.name}`,
+      parameters: t.input_schema
+        || COMPUTER_USE_SCHEMAS[t.type]
+        || { type: 'object', properties: {} }
     }
   }));
+}
+
+// Lightweight, zero-dependency heuristic JSON repair for LLM tool hallucinations.
+function repairJSON(str) {
+  if (!str) return "{}";
+  str = str.trim();
+  if (str === "") return "{}";
+  try {
+    return JSON.stringify(JSON.parse(str));
+  } catch (e) {
+    let fixed = str;
+    // 1. Fix trailing commas before closing braces/brackets
+    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+    // 2. Count unclosed brackets/braces
+    let openBraces = (fixed.match(/{/g) || []).length - (fixed.match(/}/g) || []).length;
+    let openBrackets = (fixed.match(/\[/g) || []).length - (fixed.match(/\]/g) || []).length;
+    // 3. Close open string quotes
+    let inString = false;
+    let escape = false;
+    for (let i = 0; i < fixed.length; i++) {
+      if (fixed[i] === '\\' && !escape) escape = true;
+      else if (fixed[i] === '"' && !escape) inString = !inString;
+      else escape = false;
+    }
+    if (inString) fixed += '"';
+    // 4. Append missing closing brackets/braces
+    for (let i = 0; i < openBrackets; i++) fixed += ']';
+    for (let i = 0; i < openBraces; i++) fixed += '}';
+    try {
+      return JSON.stringify(JSON.parse(fixed));
+    } catch (e2) {
+      // If we completely fail, return {} to prevent fatal parser crash.
+      return "{}";
+    }
+  }
 }
 
 // Build an SSE writer that emits canonical Anthropic events.
@@ -172,6 +369,11 @@ function createAnthropicSSEEmitter(res, model) {
   let inputTokens = 0;
   let outputTokens = 0;
   let stopReason = 'end_turn';
+
+  // Simulation Interceptor state
+  let textBuffer = '';
+  let simMode = false;
+  let simFlushed = false;
 
   function send(event, data) {
     res.write(`event: ${event}\n`);
@@ -248,6 +450,46 @@ function createAnthropicSSEEmitter(res, model) {
   function deltaText(text) {
     if (!text) return;
     start();
+
+    if (simMode) {
+      textBuffer += text;
+      return;
+    }
+
+    if (!simFlushed) {
+      textBuffer += text;
+      const t = textBuffer.trimStart();
+
+      // Detect simulation patterns at the start of the response.
+      // We use a 200-char window so preambles like "Sure!\n\n" don't
+      // prematurely flush and hide a simulation that follows.
+      const isSim = t.startsWith('<tool_use')
+        || t.startsWith('<tool_call')
+        || t.startsWith('<function_calls')
+        || t.startsWith('```json\n{"name"')
+        || t.startsWith('```\n{"name"')
+        || t.startsWith('{"name"');
+      if (isSim) {
+        simMode = true;
+        return;
+      }
+
+      // Once we have 200 chars OR clear non-simulation text, commit to normal mode.
+      const clearlyNotSim = !t.startsWith('<') && !t.startsWith('`') && !t.startsWith('{') && t.length > 8;
+      if (textBuffer.length >= 200 || clearlyNotSim) {
+        simFlushed = true;
+        ensureTextBlock();
+        send('content_block_delta', {
+          type: 'content_block_delta',
+          index: textIndex,
+          delta: { type: 'text_delta', text: textBuffer }
+        });
+        textBuffer = '';
+      }
+      return;
+    }
+
+    // Normal streaming mode.
     ensureTextBlock();
     send('content_block_delta', {
       type: 'content_block_delta',
@@ -282,12 +524,8 @@ function createAnthropicSSEEmitter(res, model) {
     }
     if (tc.function?.name && !block.name) block.name = tc.function.name;
     if (tc.function?.arguments) {
+      // Buffer the JSON rather than streaming it immediately, allowing us to repair it at the end.
       block.argsBuf += tc.function.arguments;
-      send('content_block_delta', {
-        type: 'content_block_delta',
-        index: block.index,
-        delta: { type: 'input_json_delta', partial_json: tc.function.arguments }
-      });
     }
   }
 
@@ -303,6 +541,7 @@ function createAnthropicSSEEmitter(res, model) {
       stop_sequence: 'stop_sequence'
     };
     stopReason = map[r] || 'end_turn';
+    if (res.__proxyTrace) res.__proxyTrace.note({ stopReason });
   }
 
   function setUsage(usage) {
@@ -320,7 +559,49 @@ function createAnthropicSSEEmitter(res, model) {
       send('content_block_stop', { type: 'content_block_stop', index: textIndex });
       textBlockOpen = false;
     }
+
+    // Process intercepted simulation if any
+    if (simMode && textBuffer) {
+      const simTools = parseSimulatedTools(textBuffer);
+      if (simTools.length > 0) {
+        for (const st of simTools) {
+          const bIndex = nextBlockIndex++;
+          send('content_block_start', {
+            type: 'content_block_start',
+            index: bIndex,
+            content_block: { type: 'tool_use', id: newId('toolu'), name: st.name, input: {} }
+          });
+          const repArgs = repairJSON(st.arguments);
+          send('content_block_delta', {
+            type: 'content_block_delta',
+            index: bIndex,
+            delta: { type: 'input_json_delta', partial_json: repArgs }
+          });
+          send('content_block_stop', { type: 'content_block_stop', index: bIndex });
+          toolBlocks.set(bIndex, { index: bIndex }); // Keep track so tool_use is reported
+        }
+      } else {
+        // False alarm, flush it as text
+        ensureTextBlock();
+        send('content_block_delta', {
+          type: 'content_block_delta',
+          index: textIndex,
+          delta: { type: 'text_delta', text: textBuffer }
+        });
+        send('content_block_stop', { type: 'content_block_stop', index: textIndex });
+        textBlockOpen = false;
+      }
+    }
+
     for (const block of toolBlocks.values()) {
+      if (block.argsBuf !== undefined) {
+        const repairedArgs = repairJSON(block.argsBuf);
+        send('content_block_delta', {
+          type: 'content_block_delta',
+          index: block.index,
+          delta: { type: 'input_json_delta', partial_json: repairedArgs }
+        });
+      }
       send('content_block_stop', { type: 'content_block_stop', index: block.index });
     }
     if (toolBlocks.size > 0) stopReason = 'tool_use';
@@ -330,19 +611,43 @@ function createAnthropicSSEEmitter(res, model) {
       usage: { output_tokens: outputTokens }
     });
     send('message_stop', { type: 'message_stop' });
+    if (res.__proxyTrace) {
+      res.__proxyTrace.note({
+        stopReason,
+        streamEnded: true,
+        outputTokens,
+        textBlockOpen,
+        thinkingBlockOpen,
+        toolCallCount: toolBlocks.size
+      });
+    }
     res.end();
   }
 
   function fail(err) {
+    const message = String(err && err.message || err);
+    if (res.__proxyTrace) {
+      res.__proxyTrace.note({
+        streamEnded: false,
+        streamError: {
+          name: err && err.name || 'Error',
+          message
+        }
+      });
+    }
     if (!started) {
       res.write(`event: error\ndata: ${JSON.stringify({
         type: 'error',
-        error: { type: 'api_error', message: String(err && err.message || err) }
+        error: { type: 'api_error', message }
       })}\n\n`);
       res.end();
       return;
     }
-    end();
+    send('error', {
+      type: 'error',
+      error: { type: 'api_error', message }
+    });
+    res.end();
   }
 
   return { send, start, deltaText, deltaThinking, deltaToolCall, setStopReason, setUsage, end, fail };
@@ -355,7 +660,7 @@ function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, 
   if (text) content.push({ type: 'text', text });
   for (const tc of toolCalls || []) {
     let input = {};
-    try { input = tc.arguments ? JSON.parse(tc.arguments) : {}; } catch { input = { _raw: tc.arguments }; }
+    try { input = JSON.parse(repairJSON(tc.arguments)); } catch { input = {}; }
     content.push({ type: 'tool_use', id: tc.id || newId('toolu'), name: tc.name, input });
   }
   if (content.length === 0) content.push({ type: 'text', text: '' });
@@ -382,7 +687,7 @@ function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, 
 // Iterate `data: ...` SSE lines from a Response body (Node fetch ReadableStream).
 // idleTimeoutMs: if no bytes arrive within this window the stream is considered
 // stalled and an error is thrown. Default 90s. Set to 0 to disable.
-async function* iterSSE(response, idleTimeoutMs = 90000) {
+async function* iterSSE(response, idleTimeoutMs = 300000) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
@@ -419,7 +724,21 @@ async function* iterSSE(response, idleTimeoutMs = 90000) {
         if (dataLines.length === 0) continue;
         const data = dataLines.join('\n');
         if (data === '[DONE]') return;
-        try { yield JSON.parse(data); } catch { /* skip non-JSON keepalives */ }
+        try {
+          yield JSON.parse(data);
+        } catch (e) {
+          if (data.trim()) {
+            console.warn(`[proxy] [sse] invalid JSON from upstream: ${data.slice(0, 200).replace(/\n/g, ' ')} (${e.message})`);
+            // If the upstream has emitted an error payload as plain text, surface it
+            if (/error/i.test(data) || /<!DOCTYPE html>/i.test(data)) {
+              const err = new Error(`Upstream SSE invalid JSON: ${data.slice(0, 200)}`);
+              err.stage = 'sse-json';
+              err.debug = { responsePreview: data.slice(0, 2000) };
+              throw err;
+            }
+          }
+          // skip non-JSON keepalive/heartbeat lines
+        }
       }
     }
   } finally {
@@ -429,7 +748,8 @@ async function* iterSSE(response, idleTimeoutMs = 90000) {
 
 module.exports = {
   newId,
-  CLAUDE_CODE_INTERNAL_TOOLS,
+  COMPUTER_USE_SCHEMAS,
+  BUILTIN_TOOL_DESCRIPTIONS,
   sanitizeForUpstream,
   anthropicToOpenAIMessages,
   anthropicToolsToOpenAI,

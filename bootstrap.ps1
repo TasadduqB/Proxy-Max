@@ -68,30 +68,32 @@ $Port = if ($env:PORT) { $env:PORT } else { "8787" }
 $Host_ = if ($env:HOST) { $env:HOST } else { "127.0.0.1" }
 
 $alive = $false
-try { Invoke-WebRequest -Uri "http://$Host_:$Port/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; $alive = $true } catch {}
+try { Invoke-WebRequest -Uri "http://${Host_}:${Port}/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; $alive = $true } catch {}
 if (-not $alive) {
-  Write-Host "[bootstrap] starting proxy on http://$Host_:$Port"
+  Write-Host "[bootstrap] starting proxy on http://${Host_}:${Port}"
   $env:PORT = $Port; $env:HOST = $Host_
   Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "$Here\src\server.js" `
     -RedirectStandardOutput (Join-Path $ProxyHome "server.log") `
     -RedirectStandardError  (Join-Path $ProxyHome "server.err.log")
   for ($i=0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 150
-    try { Invoke-WebRequest -Uri "http://$Host_:$Port/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; break } catch {}
+    try { Invoke-WebRequest -Uri "http://${Host_}:${Port}/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; break } catch {}
   }
 }
 
 Write-Host ""
-Write-Host "  UI:        http://$Host_:$Port/"
+Write-Host "  UI:        http://${Host_}:${Port}/"
 Write-Host "  Configure your provider, then run:"
-Write-Host "    `$env:ANTHROPIC_BASE_URL = 'http://$Host_:$Port'"
+Write-Host "    `$env:ANTHROPIC_BASE_URL = 'http://${Host_}:${Port}'"
 Write-Host "    `$env:ANTHROPIC_AUTH_TOKEN = 'proxy-max'"
-Write-Host "    claude"
+Write-Host "    `$env:ANTHROPIC_API_KEY = 'proxy-max'"
+Write-Host "    claude --dangerously-skip-permissions"
 Write-Host ""
 
 if ($args.Count -gt 0 -and ($args[0] -eq "--claude" -or $args[0])) {
-  $env:ANTHROPIC_BASE_URL = "http://$Host_:$Port"
+  $env:ANTHROPIC_BASE_URL = "http://${Host_}:${Port}"
   if (-not $env:ANTHROPIC_AUTH_TOKEN) { $env:ANTHROPIC_AUTH_TOKEN = "proxy-max" }
+  if (-not $env:ANTHROPIC_API_KEY) { $env:ANTHROPIC_API_KEY = $env:ANTHROPIC_AUTH_TOKEN }
   $rest = if ($args[0] -eq "--claude") { $args[1..($args.Count-1)] } else { $args }
-  & claude @rest
+  & claude --dangerously-skip-permissions @rest
 }

@@ -34,10 +34,11 @@ const HOST = process.env.HOST || '127.0.0.1';
   const env = {
     ...process.env,
     ANTHROPIC_BASE_URL: `http://${HOST}:${PORT}`,
-    ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || 'proxy-max'
+    ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN || 'proxy-max',
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || 'proxy-max'
   };
-  console.log(`\n→ Routing ${claude} through Proxy-Max at http://${HOST}:${PORT}\n`);
-  const child = spawn(claude, args, { stdio: 'inherit', env });
+  console.log(`\n→ Routing ${claude} through Proxy-Max at http://${HOST}:${PORT} with --dangerously-skip-permissions\n`);
+  const child = spawn(claude, ['--dangerously-skip-permissions', ...args], { stdio: 'inherit', env });
   child.on('exit', code => {
     server.kill();
     process.exit(code || 0);

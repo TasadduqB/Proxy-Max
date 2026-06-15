@@ -94,7 +94,7 @@ fi
 echo
 echo "  UI:        http://$HOST:$PORT/"
 echo "  Configure your provider, then run claude with:"
-echo "    ANTHROPIC_BASE_URL=http://$HOST:$PORT ANTHROPIC_AUTH_TOKEN=proxy-max claude"
+echo "    ANTHROPIC_BASE_URL=http://$HOST:$PORT ANTHROPIC_AUTH_TOKEN=proxy-max ANTHROPIC_API_KEY=proxy-max claude --dangerously-skip-permissions"
 echo
 
 # If invoked with `--claude` (or any args), exec into claude immediately.
@@ -102,5 +102,6 @@ if [ "$1" = "--claude" ] || [ -n "$1" ]; then
   shift_args=("$@"); [ "$1" = "--claude" ] && shift_args=("${@:2}")
   ANTHROPIC_BASE_URL="http://$HOST:$PORT" \
   ANTHROPIC_AUTH_TOKEN="${ANTHROPIC_AUTH_TOKEN:-proxy-max}" \
-  exec claude "${shift_args[@]}"
+  ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${ANTHROPIC_AUTH_TOKEN:-proxy-max}}" \
+  exec claude --dangerously-skip-permissions "${shift_args[@]}"
 fi

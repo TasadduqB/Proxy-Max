@@ -63,10 +63,86 @@ function readJSONBody(req) {
       try {
         const raw = Buffer.concat(chunks).toString('utf8');
         resolve(raw ? JSON.parse(raw) : {});
-      } catch (e) { reject(e); }
+      } catch (e) {
+        e.raw = Buffer.concat(chunks).toString('utf8').slice(0, 2000);
+        reject(e);
+      }
     });
     req.on('error', reject);
   });
+}
+
+function compactText(value, maxLen = 1200) {
+  if (value == null) return null;
+  let text;
+  if (typeof value === 'string') text = value;
+  else if (Buffer.isBuffer(value)) text = value.toString('utf8');
+  else {
+    try { text = JSON.stringify(value); }
+    catch { text = String(value); }
+  }
+  text = String(text).replace(/\s+/g, ' ').trim();
+  if (text.length > maxLen) return `${text.slice(0, maxLen)}…`;
+  return text;
+}
+
+function extractMessagePreview(content) {
+  if (typeof content === 'string') return compactText(content, 400);
+  if (!Array.isArray(content)) return null;
+  const parts = [];
+  for (const block of content) {
+    if (block && block.type === 'text' && block.text) parts.push(block.text);
+  }
+  return parts.length ? compactText(parts.join(' '), 400) : null;
+}
+
+function summarizeRequestBody(body) {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  const tools = Array.isArray(body?.tools) ? body.tools : [];
+  const lastMessage = messages.length ? messages[messages.length - 1] : null;
+  return {
+    model: body?.model || null,
+    stream: !!body?.stream,
+    maxTokens: body?.max_tokens ?? null,
+    messageCount: messages.length,
+    toolCount: tools.length,
+    hasSystem: !!body?.system,
+    lastRole: lastMessage?.role || null,
+    lastMessagePreview: extractMessagePreview(lastMessage?.content),
+    toolNames: tools.map(t => t && t.name).filter(Boolean).slice(0, 12)
+  };
+}
+
+function summarizeError(err) {
+  if (!err) return null;
+  const out = {
+    name: err.name || 'Error',
+    message: compactText(err.message || String(err), 1600)
+  };
+  if (err.stage) out.stage = err.stage;
+  if (err.code) out.code = err.code;
+  if (err.status != null) out.status = err.status;
+  if (err.contentType) out.contentType = err.contentType;
+  if (err.debug) out.debug = err.debug;
+  return out;
+}
+
+function attachRequestTrace(res, logEntry, reqStart) {
+  let finalized = false;
+  const finalize = (status, extra = {}) => {
+    if (finalized) return false;
+    finalized = true;
+    logEntry.finalStatus = status;
+    logEntry.totalMs = Date.now() - reqStart;
+    if (extra && typeof extra === 'object') Object.assign(logEntry, extra);
+    pushLog(logEntry);
+    return true;
+  };
+  const note = (extra = {}) => {
+    if (extra && typeof extra === 'object') Object.assign(logEntry, extra);
+  };
+  res.__proxyTrace = { logEntry, finalize, note };
+  return res.__proxyTrace;
 }
 
 function activeProviderConfig() {
@@ -86,6 +162,7 @@ const poolStats = new Map();
 //   404 (model removed from provider) → 1 hour — won't come back on its own
 //   3+ consecutive non-404 failures  → 5 minutes — could be transient
 const COOLDOWN_404_MS  = 60 * 60 * 1000;
+const COOLDOWN_429_MS  = 30 * 1000;        // rate-limit: short wait, it'll clear
 const COOLDOWN_FAIL_MS = 5  * 60 * 1000;
 const COOLDOWN_FAIL_THRESHOLD = 3;
 
@@ -176,11 +253,17 @@ function writeLogLine(entry) {
       hasTools: entry.hasTools,
       hasSystem: entry.hasSystem,
       poolSize: entry.poolSize,
+      request: entry.request || null,
+      error: entry.error || null,
       attempts: (entry.attempts || []).map(a => ({
         label:      a.label,
         status:     a.status,
         durationMs: a.durationMs,
-        error:      a.error || null
+        stage:      a.stage || null,
+        upstreamStatus: a.upstreamStatus ?? null,
+        contentType: a.contentType || null,
+        error:      a.error || null,
+        responsePreview: a.responsePreview || null
       }))
     });
     fs.appendFileSync(LOG_FILE, line + '\n', 'utf8');
@@ -291,13 +374,23 @@ async function handleMessages(req, res) {
 
   let body;
   try { body = await readJSONBody(req); }
-  catch { return send(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'Bad JSON' } }); }
+  catch (err) {
+    return send(res, 400, {
+      type: 'error',
+      error: {
+        type: 'invalid_request_error',
+        message: 'Bad JSON',
+        detail: err.raw || err.message
+      }
+    });
+  }
 
   // Build log entry for this request.
   const reqId = Math.random().toString(36).slice(2, 10);
   const logEntry = {
     id: reqId,
     ts: Date.now(),
+    request: summarizeRequestBody(body),
     stream: !!body.stream,
     maxTokens: body.max_tokens || null,
     messageCount: (body.messages || []).length,
@@ -309,12 +402,19 @@ async function handleMessages(req, res) {
     totalMs: 0
   };
   const reqStart = Date.now();
+  attachRequestTrace(res, logEntry, reqStart);
 
   // Round-robin + fallback with circuit breaker.
   // Members in cooldown are skipped instantly (no upstream call).
   const startIdx = poolRR;
   let tried = 0; // members actually called (not skipped)
   let skipped = 0;
+
+  // Preserve the model name the CLI originally requested (e.g. "claude-opus-4-8").
+  // The proxy overwrites body.model with the real upstream model for each attempt,
+  // but the *response* must echo back the requested name so the Claude CLI doesn't
+  // detect a non-Claude model and fall into degraded/simulation mode.
+  const requestedModel = body.model || 'claude-sonnet-4-20250514';
 
   for (let attempt = 0; attempt < pool.length; attempt++) {
     const idx = (startIdx + attempt) % pool.length;
@@ -337,6 +437,7 @@ async function handleMessages(req, res) {
 
     tried++;
     body.model = cfg.model;
+    body._requestedModel = requestedModel;
     stat.req++;
     const t0 = Date.now();
 
@@ -366,16 +467,31 @@ async function handleMessages(req, res) {
     } catch (err) {
       attemptLog.durationMs = Date.now() - t0;
       attemptLog.status = 'err';
-      attemptLog.error = err.message.slice(0, 300);
+      attemptLog.error = compactText(err.message, 400);
+      if (err.stage) attemptLog.stage = err.stage;
+      if (err.status != null) attemptLog.upstreamStatus = err.status;
+      if (err.contentType) attemptLog.contentType = err.contentType;
+      if (err.debug?.responsePreview) attemptLog.responsePreview = err.debug.responsePreview;
+      if (err.debug?.responseBody) attemptLog.responsePreview = err.debug.responseBody;
+      if (err.debug?.requestPreview && !logEntry.requestPreview) logEntry.requestPreview = err.debug.requestPreview;
       stat.err++;
       stat.lastMs = attemptLog.durationMs;
       stat.consecutiveFails = (stat.consecutiveFails || 0) + 1;
 
-      // Circuit breaker: trip on 404 (dead model) or repeated failures.
+      // Circuit breaker: trip on 404 (dead model), short-cool 429 (rate limit),
+      // or repeated non-transient failures.
       const is404 = /Upstream 4[0-9]{2}/.test(err.message) && err.message.includes('404');
+      const is429 = /Upstream 429/.test(err.message) || (err.status === 429);
       if (is404) {
         stat.cooledUntil = Date.now() + COOLDOWN_404_MS;
         console.warn(`[proxy] [breaker] ${cfg.label} → 404 (model gone), cooldown 1h`);
+      } else if (is429) {
+        // 429 = rate limit. Don't count toward consecutiveFails (it's transient).
+        // Use a short cooldown so other pool members get a chance.
+        stat.cooledUntil = Date.now() + COOLDOWN_429_MS;
+        // Don't increment consecutiveFails — rate limits aren't model failures.
+        stat.consecutiveFails = Math.max(0, (stat.consecutiveFails || 0) - 1);
+        console.warn(`[proxy] [breaker] ${cfg.label} → 429 (rate limited), short cooldown 30s`);
       } else if (stat.consecutiveFails >= COOLDOWN_FAIL_THRESHOLD) {
         stat.cooledUntil = Date.now() + COOLDOWN_FAIL_MS;
         console.warn(`[proxy] [breaker] ${cfg.label} → ${stat.consecutiveFails} consecutive fails, cooldown 5m`);
@@ -384,10 +500,18 @@ async function handleMessages(req, res) {
       logEntry.attempts.push(attemptLog);
 
       if (res.headersSent) {
-        logEntry.finalStatus = 'mid-stream-err';
-        logEntry.totalMs = Date.now() - reqStart;
-        pushLog(logEntry);
-        console.error(`[proxy] [mid-stream] ${cfg.label}: ${err.message}`);
+        if (res.__proxyTrace) {
+          res.__proxyTrace.finalize('mid-stream-err', {
+            error: summarizeError(err),
+            request: logEntry.request,
+            attempt: attemptLog
+          });
+        } else {
+          logEntry.finalStatus = 'mid-stream-err';
+          logEntry.totalMs = Date.now() - reqStart;
+          pushLog(logEntry);
+        }
+        console.error(`[proxy] [mid-stream] ${reqId} ${cfg.label}: ${err.message}`);
         try { res.end(); } catch {}
         return;
       }
@@ -402,7 +526,7 @@ async function handleMessages(req, res) {
         const msg = tried === 0
           ? `All ${pool.length} pool members are in circuit-breaker cooldown. Try again later.`
           : `All pool members failed. Last error: ${err.message}`;
-        console.error(`[proxy] [${logEntry.finalStatus}] ${msg}`);
+        console.error(`[proxy] [${logEntry.finalStatus}] ${reqId} ${msg}`);
         send(res, 502, { type: 'error', error: { type: 'api_error', message: msg } });
       }
     }
@@ -417,6 +541,18 @@ async function handleMessages(req, res) {
       type: 'error',
       error: { type: 'api_error', message: `All ${skipped} pool members are in circuit-breaker cooldown. Try again later.` }
     });
+  }
+}
+
+async function handleCountTokens(req, res) {
+  try {
+    const body = await readJSONBody(req);
+    // Approximate token count: ~4 characters per token for standard English text/JSON.
+    const str = JSON.stringify(body);
+    const estimatedTokens = Math.ceil(str.length / 4);
+    send(res, 200, { input_tokens: estimatedTokens });
+  } catch (err) {
+    send(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: err.message } });
   }
 }
 
@@ -546,6 +682,10 @@ function buildSystem() {
   const claudeVer = claudePath ? probeVersion(claudePath) : null;
   const claude = { path: claudePath, version: claudeVer, ok: !!claudePath };
 
+  const pythonPath = installer.detectPython ? installer.detectPython() : null;
+  const pythonVer = pythonPath ? probeVersion(pythonPath) : null;
+  const python = { path: pythonPath, version: pythonVer, ok: !!pythonPath };
+
   const admin = isAdminSync();
 
   const home = os.homedir();
@@ -567,7 +707,7 @@ function buildSystem() {
     npmPrefix: installer.NPM_PREFIX,
     portableNodeDir: installer.NODE_DIR,
     pathDirs,
-    components: { node, npm, claude },
+    components: { node, npm, claude, python },
     canConfigure: !!claudePath
   };
 }
@@ -687,9 +827,9 @@ function handleLaunchCommand(_req, res) {
   const claudeCmd = claudePath || 'claude';
   const platform = process.platform;
 
-  const unix   = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\n${claudeCmd}`;
-  const ps     = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\n${claudeCmd}`;
-  const wincmd = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && ${claudeCmd}`;
+  const unix   = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\nexport ANTHROPIC_API_KEY="proxy-max"\n${claudeCmd} --dangerously-skip-permissions`;
+  const ps     = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\n$env:ANTHROPIC_API_KEY = "proxy-max"\n${claudeCmd} --dangerously-skip-permissions`;
+  const wincmd = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && set ANTHROPIC_API_KEY=proxy-max && ${claudeCmd} --dangerously-skip-permissions`;
 
   send(res, 200, {
     platform,
@@ -793,12 +933,42 @@ function serveStatic(req, res) {
   });
 }
 
+// Anthropic /v1/models response — Claude Code may query this to confirm the API is reachable.
+function handleV1Models(_req, res) {
+  // Surface a realistic-looking Claude model list so Claude Code doesn't fall into
+  // degraded mode. The actual upstream model is transparent to the CLI.
+  // Include max_input_tokens, max_tokens, capabilities so the SDK can use them.
+  const data = [
+    { type: 'model', id: 'claude-opus-4-20250514',   display_name: 'Claude Opus 4',     created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 32000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
+    { type: 'model', id: 'claude-opus-4-8',           display_name: 'Claude Opus 4.8',   created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 32000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
+    { type: 'model', id: 'claude-sonnet-4-20250514',  display_name: 'Claude Sonnet 4',   created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
+    { type: 'model', id: 'claude-sonnet-4-6',         display_name: 'Claude Sonnet 4.6', created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
+    { type: 'model', id: 'claude-haiku-4-5-20251001', display_name: 'Claude Haiku 4.5',  created_at: '2025-10-01T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000,  capabilities: { vision: true, tool_use: true } },
+    { type: 'model', id: 'claude-3-5-sonnet-20241022',display_name: 'Claude 3.5 Sonnet', created_at: '2024-10-22T00:00:00Z', max_input_tokens: 200000, max_tokens: 8192,   capabilities: { vision: true, tool_use: true } },
+  ];
+  send(res, 200, { data, has_more: false, first_id: data[0].id, last_id: data[data.length - 1].id });
+}
+
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
+
+  // CORS — Claude Code and browser-based tests may call from different origins.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, anthropic-version, anthropic-beta');
+  // request-id — Claude Code uses this for client-side request correlation/tracing.
+  res.setHeader('request-id', `proxy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`);
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
   try {
     if (req.method === 'POST' && (u.pathname === '/v1/messages' || u.pathname === '/messages')) {
       return await handleMessages(req, res);
     }
+    if (req.method === 'POST' && u.pathname === '/v1/messages/count_tokens') {
+      return await handleCountTokens(req, res);
+    }
+    // /v1/models — Claude Code Anthropic SDK may query this on startup.
+    if (u.pathname === '/v1/models' && req.method === 'GET') return handleV1Models(req, res);
     if (u.pathname === '/api/models') return send(res, 200, MODELS);
     if (u.pathname === '/api/system' && req.method === 'GET') return await handleSystem(req, res);
     if (u.pathname === '/api/install' && req.method === 'POST') return await handleInstall(req, res);

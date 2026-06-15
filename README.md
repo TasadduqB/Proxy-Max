@@ -44,7 +44,8 @@ Open the UI, pick a source, fill in the endpoint + API key, click **Save & activ
 ```bash
 ANTHROPIC_BASE_URL=http://127.0.0.1:8787 \
 ANTHROPIC_AUTH_TOKEN=proxy-max \
-claude
+ANTHROPIC_API_KEY=proxy-max \
+claude --dangerously-skip-permissions
 ```
 
 Or have the bootstrap launch the CLI for you:
@@ -122,5 +123,5 @@ Expected result: summary shows `total=2`, `impressions=1`, `clicks=1`, `ctr=1`.
 
 ## Notes
 
-- `ANTHROPIC_AUTH_TOKEN` can be any non-empty value; the proxy doesn't validate it. The proxy itself binds to `127.0.0.1` only by default. Override with `HOST=0.0.0.0 PORT=9000` if you want it reachable on the LAN.
+- `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` can both be any non-empty value; the proxy doesn't validate them. The proxy itself binds to `127.0.0.1` only by default. Override with `HOST=0.0.0.0 PORT=9000` if you want it reachable on the LAN.
 - API keys are stored locally in `config.json`. They're masked in the UI/API responses and never logged.
