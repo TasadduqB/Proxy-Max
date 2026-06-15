@@ -85,22 +85,52 @@ if (-not $alive) {
   }
 }
 
+$BaseUrl = "http://${Host_}:${Port}"
+
 Write-Host ""
-Write-Host "  UI:        http://${Host_}:${Port}/"
-Write-Host "  Configure your provider, then run:"
-Write-Host "    `$env:ANTHROPIC_BASE_URL = 'http://${Host_}:${Port}'"
-Write-Host "    `$env:ANTHROPIC_AUTH_TOKEN = 'proxy-max'"
-Write-Host "    `$env:ANTHROPIC_API_KEY = 'proxy-max'"
-Write-Host "    claude --dangerously-skip-permissions"
+Write-Host "  Proxy-Max is running at $BaseUrl"
 Write-Host ""
-Write-Host "  TIP: If you get 'fetch failed' / SELF_SIGNED_CERT_IN_CHAIN (corporate SSL proxy):"
-Write-Host "    `$env:PROXY_INSECURE = '1'; .\bootstrap.ps1"
+Write-Host "  What would you like to do?"
+Write-Host ""
+Write-Host "  [1] Open UI in browser"
+Write-Host "  [2] Launch claude (standard)"
+Write-Host "  [3] Launch claude with PROXY_INSECURE=1  (fix: fetch failed / SELF_SIGNED_CERT_IN_CHAIN)"
+Write-Host "  [4] Exit"
 Write-Host ""
 
-if ($args.Count -gt 0 -and ($args[0] -eq "--claude" -or $args[0])) {
-  $env:ANTHROPIC_BASE_URL = "http://${Host_}:${Port}"
-  if (-not $env:ANTHROPIC_AUTH_TOKEN) { $env:ANTHROPIC_AUTH_TOKEN = "proxy-max" }
-  if (-not $env:ANTHROPIC_API_KEY) { $env:ANTHROPIC_API_KEY = $env:ANTHROPIC_AUTH_TOKEN }
-  $rest = if ($args[0] -eq "--claude") { $args[1..($args.Count-1)] } else { $args }
-  & claude --dangerously-skip-permissions @rest
+$choice = Read-Host "  Enter choice (1-4)"
+
+switch ($choice.Trim()) {
+  "1" {
+    Start-Process $BaseUrl
+    Write-Host "  Opened $BaseUrl in your browser."
+  }
+  "2" {
+    $env:ANTHROPIC_BASE_URL  = $BaseUrl
+    $env:ANTHROPIC_AUTH_TOKEN = if ($env:ANTHROPIC_AUTH_TOKEN) { $env:ANTHROPIC_AUTH_TOKEN } else { "proxy-max" }
+    $env:ANTHROPIC_API_KEY   = if ($env:ANTHROPIC_API_KEY)    { $env:ANTHROPIC_API_KEY }    else { $env:ANTHROPIC_AUTH_TOKEN }
+    Write-Host "  Starting claude…"
+    & claude --dangerously-skip-permissions
+  }
+  "3" {
+    $env:PROXY_INSECURE       = "1"
+    $env:ANTHROPIC_BASE_URL  = $BaseUrl
+    $env:ANTHROPIC_AUTH_TOKEN = if ($env:ANTHROPIC_AUTH_TOKEN) { $env:ANTHROPIC_AUTH_TOKEN } else { "proxy-max" }
+    $env:ANTHROPIC_API_KEY   = if ($env:ANTHROPIC_API_KEY)    { $env:ANTHROPIC_API_KEY }    else { $env:ANTHROPIC_AUTH_TOKEN }
+    Write-Host "  Restarting proxy with PROXY_INSECURE=1 and launching claude…"
+    # Kill existing proxy and restart with insecure flag
+    Stop-Process -Name "node" -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+    Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "$Here\src\server.js" `
+      -RedirectStandardOutput (Join-Path $ProxyHome "server.log") `
+      -RedirectStandardError  (Join-Path $ProxyHome "server.err.log")
+    Start-Sleep -Seconds 2
+    & claude --dangerously-skip-permissions
+  }
+  "4" {
+    Write-Host "  Proxy is still running at $BaseUrl. Goodbye."
+  }
+  default {
+    Write-Host "  Invalid choice. Proxy is running at $BaseUrl"
+  }
 }
