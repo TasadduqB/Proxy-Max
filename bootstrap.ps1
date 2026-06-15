@@ -67,23 +67,34 @@ Ensure-Claude
 $Port = if ($env:PORT) { $env:PORT } else { "8787" }
 $Host_ = if ($env:HOST) { $env:HOST } else { "127.0.0.1" }
 
-$alive = $false
-try { Invoke-WebRequest -Uri "http://${Host_}:${Port}/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; $alive = $true } catch {}
-if (-not $alive) {
-  Write-Host "[bootstrap] starting proxy on http://${Host_}:${Port}"
+function Start-Proxy {
+  param([string]$Insecure = "")
+  # Kill any existing proxy on this port
+  $existing = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty OwningProcess -ErrorAction SilentlyContinue
+  if ($existing) {
+    Write-Host "[bootstrap] stopping existing proxy (PID $existing)…"
+    Stop-Process -Id $existing -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 600
+  }
+  Write-Host "[bootstrap] starting proxy on http://${Host_}:${Port}$(if ($Insecure) { ' [PROXY_INSECURE=1]' })"
   $env:PORT = $Port; $env:HOST = $Host_
-  # PROXY_INSECURE=1 bypasses TLS cert verification — needed on networks with SSL inspection
-  # (corporate proxies that inject a self-signed cert, causing SELF_SIGNED_CERT_IN_CHAIN errors).
-  # Set $env:PROXY_INSECURE = "1" before running bootstrap.ps1 to enable.
-  if ($env:PROXY_INSECURE) { $env:PROXY_INSECURE = $env:PROXY_INSECURE }
+  if ($Insecure) { $env:PROXY_INSECURE = "1" } else { Remove-Item Env:PROXY_INSECURE -ErrorAction SilentlyContinue }
   Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "$Here\src\server.js" `
     -RedirectStandardOutput (Join-Path $ProxyHome "server.log") `
     -RedirectStandardError  (Join-Path $ProxyHome "server.err.log")
+  Write-Host "[bootstrap] waiting for proxy…" -NoNewline
   for ($i=0; $i -lt 40; $i++) {
-    Start-Sleep -Milliseconds 150
-    try { Invoke-WebRequest -Uri "http://${Host_}:${Port}/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; break } catch {}
+    Start-Sleep -Milliseconds 200
+    try { Invoke-WebRequest -Uri "http://${Host_}:${Port}/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; Write-Host " ready."; return } catch {}
+    Write-Host "." -NoNewline
   }
+  Write-Host " timeout."
 }
+
+$alive = $false
+try { Invoke-WebRequest -Uri "http://${Host_}:${Port}/api/health" -TimeoutSec 1 -UseBasicParsing | Out-Null; $alive = $true } catch {}
+if (-not $alive) { Start-Proxy }
 
 $BaseUrl = "http://${Host_}:${Port}"
 
@@ -93,12 +104,19 @@ Write-Host ""
 Write-Host "  What would you like to do?"
 Write-Host ""
 Write-Host "  [1] Open UI in browser"
-Write-Host "  [2] Launch claude (standard)"
-Write-Host "  [3] Launch claude with PROXY_INSECURE=1  (fix: fetch failed / SELF_SIGNED_CERT_IN_CHAIN)"
-Write-Host "  [4] Exit"
+Write-Host "  [2] Launch claude"
+Write-Host "  [3] Hard restart proxy  (pick up code changes / clear stuck state)"
+Write-Host "  [4] Hard restart proxy with PROXY_INSECURE=1  (fix: fetch failed / SSL cert error)"
+Write-Host "  [5] Exit"
 Write-Host ""
 
-$choice = Read-Host "  Enter choice (1-4)"
+$choice = Read-Host "  Enter choice (1-5)"
+
+function Set-ClaudeEnv {
+  $env:ANTHROPIC_BASE_URL   = $BaseUrl
+  $env:ANTHROPIC_AUTH_TOKEN = if ($env:ANTHROPIC_AUTH_TOKEN) { $env:ANTHROPIC_AUTH_TOKEN } else { "proxy-max" }
+  $env:ANTHROPIC_API_KEY    = if ($env:ANTHROPIC_API_KEY)    { $env:ANTHROPIC_API_KEY }    else { $env:ANTHROPIC_AUTH_TOKEN }
+}
 
 switch ($choice.Trim()) {
   "1" {
@@ -106,28 +124,24 @@ switch ($choice.Trim()) {
     Write-Host "  Opened $BaseUrl in your browser."
   }
   "2" {
-    $env:ANTHROPIC_BASE_URL  = $BaseUrl
-    $env:ANTHROPIC_AUTH_TOKEN = if ($env:ANTHROPIC_AUTH_TOKEN) { $env:ANTHROPIC_AUTH_TOKEN } else { "proxy-max" }
-    $env:ANTHROPIC_API_KEY   = if ($env:ANTHROPIC_API_KEY)    { $env:ANTHROPIC_API_KEY }    else { $env:ANTHROPIC_AUTH_TOKEN }
+    Set-ClaudeEnv
     Write-Host "  Starting claude…"
     & claude --dangerously-skip-permissions
   }
   "3" {
-    $env:PROXY_INSECURE       = "1"
-    $env:ANTHROPIC_BASE_URL  = $BaseUrl
-    $env:ANTHROPIC_AUTH_TOKEN = if ($env:ANTHROPIC_AUTH_TOKEN) { $env:ANTHROPIC_AUTH_TOKEN } else { "proxy-max" }
-    $env:ANTHROPIC_API_KEY   = if ($env:ANTHROPIC_API_KEY)    { $env:ANTHROPIC_API_KEY }    else { $env:ANTHROPIC_AUTH_TOKEN }
-    Write-Host "  Restarting proxy with PROXY_INSECURE=1 and launching claude…"
-    # Kill existing proxy and restart with insecure flag
-    Stop-Process -Name "node" -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
-    Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "$Here\src\server.js" `
-      -RedirectStandardOutput (Join-Path $ProxyHome "server.log") `
-      -RedirectStandardError  (Join-Path $ProxyHome "server.err.log")
-    Start-Sleep -Seconds 2
-    & claude --dangerously-skip-permissions
+    Write-Host "  Hard restarting proxy…"
+    Start-Proxy
+    Write-Host "  Proxy restarted. Open $BaseUrl to configure."
+    Start-Process $BaseUrl
   }
   "4" {
+    Write-Host "  Hard restarting proxy with PROXY_INSECURE=1…"
+    Start-Proxy -Insecure "1"
+    Set-ClaudeEnv
+    Write-Host "  Starting claude…"
+    & claude --dangerously-skip-permissions
+  }
+  "5" {
     Write-Host "  Proxy is still running at $BaseUrl. Goodbye."
   }
   default {
