@@ -2,6 +2,21 @@
 // Both expose /v1/chat/completions; only auth + URL shape differ.
 // Azure also supports the newer Responses API at /openai/responses.
 
+// Auto-install undici if it's not available as a standalone module.
+// Node.js bundles undici internally (powers the global fetch) but doesn't expose
+// it via require('undici') without installation. We need it to create an Agent
+// with rejectUnauthorized:false for corporate SSL inspection proxy support.
+(function ensureUndici() {
+  try { require('undici'); return; } catch {}
+  const { spawnSync } = require('child_process');
+  const projectRoot = require('path').join(__dirname, '..', '..');
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  process.stdout.write('[proxy] undici not found — installing (one-time setup)…\n');
+  const r = spawnSync(npm, ['install', 'undici', '--save'], { cwd: projectRoot, stdio: 'inherit' });
+  if (r.status !== 0) process.stderr.write('[proxy] undici install failed — TLS fallback will use NODE_TLS_REJECT_UNAUTHORIZED\n');
+  else process.stdout.write('[proxy] undici installed\n');
+})();
+
 // Support PROXY_INSECURE=1 or NODE_TLS_REJECT_UNAUTHORIZED=0 for corporate SSL inspection proxies
 // that inject a self-signed cert into the chain (SELF_SIGNED_CERT_IN_CHAIN error).
 let _insecureDispatcher = null;

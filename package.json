@@ -12,7 +12,9 @@
     "doctor": "node src/install.js",
     "test:panel": "node src/panel_test.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "undici": "^8.4.1"
+  },
   "engines": {
     "node": ">=18"
   },
