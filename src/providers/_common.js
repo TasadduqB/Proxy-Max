@@ -555,6 +555,21 @@ function createAnthropicSSEEmitter(res, model) {
   function end() {
     start();
     closeThinkingBlock();
+
+    // Flush any text stuck in the simulation detection buffer.
+    // This happens when the full response is short (< 8 chars, e.g. "4", "ok")
+    // and never satisfied the clearlyNotSim or 200-char thresholds.
+    if (!simFlushed && !simMode && textBuffer) {
+      simFlushed = true;
+      ensureTextBlock();
+      send('content_block_delta', {
+        type: 'content_block_delta',
+        index: textIndex,
+        delta: { type: 'text_delta', text: textBuffer }
+      });
+      textBuffer = '';
+    }
+
     if (textBlockOpen) {
       send('content_block_stop', { type: 'content_block_stop', index: textIndex });
       textBlockOpen = false;
