@@ -490,7 +490,8 @@ async function callOpenAICompatible(providerCfg, body, res) {
   } catch (err) {
     clearTimeout(timer);
     if (err.name === 'AbortError') throw new Error(`Upstream connection timed out after ${connectTimeoutMs}ms (URL: ${url})`);
-    throw Object.assign(err, { message: `${err.message} (URL: ${url})` });
+    const cause = err.cause ? ` — ${err.cause.code || err.cause.message || err.cause}` : '';
+    throw Object.assign(err, { message: `${err.message}${cause} (URL: ${url})` });
   } finally {
     // Streaming: clear the connection timer once headers arrive — per-chunk
     // idle timeout in iterSSE takes over. Non-streaming: keep it running so
@@ -700,12 +701,25 @@ function modelForUpstream(cfg) {
   return cfg.model;
 }
 
+// Models that require the Responses API (/openai/responses) — Chat Completions won't work.
+const RESPONSES_API_MODELS = new Set(['gpt-5.5', 'o3', 'o4-mini']);
+// Also detect by model-id prefix/suffix patterns (deployment names often end in a suffix).
+function requiresResponsesApi(modelId) {
+  if (!modelId) return false;
+  const m = modelId.toLowerCase();
+  if (RESPONSES_API_MODELS.has(m)) return true;
+  // Match deployment names like "gpt-5.5-TVS" — strip trailing -XX[X] suffix and check
+  const base = m.replace(/-[a-z0-9]+$/i, '');
+  return RESPONSES_API_MODELS.has(base);
+}
+
 function buildRequest(cfg) {
   if (cfg.kind === 'azure') {
     // Three flavors:
     //   1) Passthrough: endpoint already contains a full API path — use as-is.
-    //   2) AOAI deployment: {endpoint}/openai/deployments/{deployment}/chat/completions?api-version=...
-    //   3) Direct Foundry inference: {endpoint}/chat/completions?api-version=...
+    //   2) Responses API: model requires /openai/responses (e.g. gpt-5.5)
+    //   3) AOAI deployment: {endpoint}/openai/deployments/{deployment}/chat/completions?api-version=...
+    //   4) Direct Foundry inference: {endpoint}/chat/completions?api-version=...
     const endpoint = (cfg.endpoint || '').trim().replace(/\/+$/, '');
     const apiVersion = cfg.apiVersion || '2024-10-21';
 
@@ -724,6 +738,10 @@ function buildRequest(cfg) {
         url = `${endpoint}${sep}api-version=${encodeURIComponent(apiVersion)}`;
       }
       isResponsesApi = pathname.includes('/openai/responses');
+    } else if (requiresResponsesApi(cfg.model) || requiresResponsesApi(cfg.deployment)) {
+      // Model requires Responses API — route to /openai/responses regardless of deployment field.
+      url = `${endpoint}/openai/responses?api-version=${encodeURIComponent(apiVersion)}`;
+      isResponsesApi = true;
     } else if (cfg.deployment) {
       url = `${endpoint}/openai/deployments/${encodeURIComponent(cfg.deployment)}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
     } else {
