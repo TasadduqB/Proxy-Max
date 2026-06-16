@@ -202,8 +202,82 @@ function detectClaude() {
 }
 
 function detectPython() {
-  const p = which('python') || which('python3');
-  return p;
+  // Prefer versioned 3.10+ binaries (needed by Claude Code security-guidance hooks).
+  for (const bin of ['python3.14','python3.13','python3.12','python3.11','python3.10']) {
+    const p = which(bin); if (p) return p;
+  }
+  // Fall back to unversioned — check if it's actually 3.10+.
+  for (const bin of ['python3','python']) {
+    const p = which(bin);
+    if (!p) continue;
+    try {
+      const r = spawnSync(p, ['-c', 'import sys; print(sys.version_info[:2])'], { encoding:'utf8', stdio:'pipe' });
+      const m = (r.stdout||'').match(/\((\d+),\s*(\d+)/);
+      if (m && (parseInt(m[1]) > 3 || (parseInt(m[1]) === 3 && parseInt(m[2]) >= 10))) return p;
+    } catch {}
+  }
+  return null;
+}
+
+async function ensurePython() {
+  if (detectPython()) return;
+  log('Python 3.10+ not found — installing…');
+  if (process.platform === 'darwin') {
+    if (which('brew')) {
+      run('brew', ['install', 'python@3.13']);
+      if (detectPython()) { log('Python installed via Homebrew.'); return; }
+    }
+  } else if (process.platform === 'linux') {
+    // Try to add deadsnakes PPA on Ubuntu/Debian for a newer python if needed.
+    if (isAdmin() && which('apt-get')) {
+      run('apt-get', ['update', '-qq']);
+      // Try python3.12 first, fall back to python3.11 / python3.10.
+      for (const pkg of ['python3.12','python3.11','python3.10','python3']) {
+        if (run('apt-get', ['install', '-y', '-qq', pkg])) {
+          if (detectPython()) { log(`Python installed via apt-get (${pkg}).`); return; }
+        }
+      }
+    } else if (isAdmin() && which('dnf')) {
+      run('dnf', ['install', '-y', 'python3.12']) || run('dnf', ['install', '-y', 'python3']);
+      if (detectPython()) { log('Python installed via dnf.'); return; }
+    } else if (isAdmin() && which('yum')) {
+      run('yum', ['install', '-y', 'python3']);
+      if (detectPython()) { log('Python installed via yum.'); return; }
+    } else if (isAdmin() && which('pacman')) {
+      run('pacman', ['-Sy', '--noconfirm', 'python']);
+      if (detectPython()) { log('Python installed via pacman.'); return; }
+    }
+  }
+  warn('Could not auto-install Python 3.10+. Claude Code hooks that need Python will show a non-blocking warning.');
+  warn('Fix: brew install python@3.13  (macOS)  or  sudo apt-get install python3.12  (Linux)');
+}
+
+function symlinkPythonForHooks() {
+  // Claude Code hooks run in a minimal PATH. Symlink the best python3 we can find
+  // into /usr/local/bin so hooks always resolve it without Homebrew in PATH.
+  if (isWin) return;
+  const p = detectPython();
+  if (!p) return;
+  const target = '/usr/local/bin/python3';
+  try {
+    const existing = fs.existsSync(target) ? fs.realpathSync(target) : null;
+    if (existing === fs.realpathSync(p)) return; // already correct
+    if (!existing || existing !== p) {
+      try { fs.unlinkSync(target); } catch {}
+      fs.symlinkSync(p, target);
+      log(`Symlinked ${p} → ${target} (for Claude Code hooks)`);
+    }
+  } catch {
+    // No write permission to /usr/local/bin — try ~/.local/bin instead.
+    const localBin = path.join(HOME, '.local', 'bin');
+    try {
+      fs.mkdirSync(localBin, { recursive: true });
+      const lt = path.join(localBin, 'python3');
+      try { fs.unlinkSync(lt); } catch {}
+      fs.symlinkSync(p, lt);
+      log(`Symlinked ${p} → ${lt} (add ${localBin} to PATH for hooks)`);
+    } catch {}
+  }
 }
 
 async function ensureClaude(npmBin) {
@@ -239,6 +313,8 @@ function doctor() {
   console.log('npm      :', npm || '(not found)');
   const claude = detectClaude();
   console.log('claude   :', claude || '(not found)');
+  const python = detectPython();
+  console.log('python   :', python || '(not found — Claude Code hooks need python3.10+)');
   console.log('home     :', HOME);
   console.log('cache    :', ROOT);
   console.log('PATH adds:', [path.join(NODE_DIR, isWin ? '' : 'bin'), path.join(NPM_PREFIX, isWin ? '' : 'bin')].join(path.delimiter));
@@ -264,6 +340,11 @@ async function main() {
   const claude = await ensureClaude(nodeInfo.npm);
   log(`Anthropic CLI: ${claude}`);
 
+  if (!onlyClaude && !onlyNode) {
+    await ensurePython();
+    symlinkPythonForHooks();
+  }
+
   // Print a one-liner the user can paste into their shell to make `claude` discoverable.
   const exportLine = isWin
     ? `setx PATH "%PATH%;${path.join(NPM_PREFIX, '')};${NODE_DIR}"`
@@ -276,4 +357,4 @@ if (require.main === module) {
   main().catch(err => { warn(err.stack || err.message); process.exit(1); });
 }
 
-module.exports = { detectNode, detectClaude, detectPython, ensureNode, ensureClaude, which, doctor, ROOT, NPM_PREFIX, NODE_DIR };
+module.exports = { detectNode, detectClaude, detectPython, ensurePython, symlinkPythonForHooks, ensureNode, ensureClaude, which, doctor, ROOT, NPM_PREFIX, NODE_DIR };
