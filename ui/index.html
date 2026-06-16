@@ -240,6 +240,14 @@
   .i.ok svg { color:var(--ok); } .i.err svg { color:var(--err); } .i.warn svg { color:var(--warn); }
   span.err svg, span.ok svg, span.warn svg { width:14px; height:14px; display:inline; vertical-align:-2px; }
   .cooldown-badge svg { width:11px; height:11px; display:inline; vertical-align:-1px; }
+  .url-detect { background:var(--panel); border:1.5px dashed var(--accent); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+  .url-detect label { font-size:11px; font-weight:600; letter-spacing:.04em; color:var(--accent); text-transform:uppercase; margin-bottom:6px; display:block; }
+  .url-detect input { width:100%; box-sizing:border-box; }
+  .url-detect-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; min-height:0; }
+  .url-detect-tags:empty { display:none; }
+  .utag { font-size:11px; background:rgba(99,179,237,.13); color:var(--accent); border:1px solid rgba(99,179,237,.3); border-radius:4px; padding:2px 8px; }
+  .utag.ok { background:rgba(72,199,142,.13); color:var(--ok); border-color:rgba(72,199,142,.3); }
+  .utag.warn { background:rgba(255,181,71,.13); color:var(--warn); border-color:rgba(255,181,71,.3); }
 
   /* ── Tabs ── */
   .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:14px; }
@@ -532,6 +540,11 @@
         </div>
       </div>
 
+        <div class="card url-detect">
+          <label>Auto-configure from URL</label>
+          <input id="urlDetect" placeholder="Paste any Azure Target URI, NVIDIA build URL, or Bedrock endpoint…" autocomplete="off" spellcheck="false" />
+          <div class="url-detect-tags" id="urlDetectTags"></div>
+        </div>
       <div class="card hide" id="formCard">
         <h3>2. Model &amp; credentials <span class="badge" id="provBadge"></span></h3>
         <label>Model</label>
@@ -974,7 +987,109 @@ const SVG = {
   copy:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
 };
+function autoDetectUrl(raw) {
+  const url = raw.trim();
+  const tags = $('#urlDetectTags');
+  tags.innerHTML = '';
+  if (!url) return;
+
+  let parsed;
+  try { parsed = new URL(url); } catch { tag('Invalid URL', 'warn'); return; }
+
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname;
+  const qs   = parsed.searchParams;
+
+  function tag(text, cls = '') { const s = document.createElement('span'); s.className = 'utag' + (cls ? ' ' + cls : ''); s.textContent = text; tags.appendChild(s); }
+
+  // ── Azure ──────────────────────────────────────────────────────────
+  if (host.endsWith('.cognitiveservices.azure.com') ||
+      host.endsWith('.openai.azure.com') ||
+      host.endsWith('.services.ai.azure.com')) {
+
+    // Select Azure provider tab
+    selectProvider('azure');
+
+    // Always fill endpoint with full pasted URL (passthrough mode)
+    $('#az_endpoint').value = url;
+
+    // API version
+    const av = qs.get('api-version');
+    if (av) { $('#az_apiVersion').value = av; tag('api-version: ' + av, 'ok'); }
+
+    // Deployment from path: /openai/deployments/{name}/...
+    const depMatch = path.match(/\/openai\/deployments\/([^\/]+)/);
+    if (depMatch) { $('#az_deployment').value = decodeURIComponent(depMatch[1]); tag('deploy: ' + depMatch[1], 'ok'); }
+
+    // API type
+    if (path.includes('/openai/responses')) { tag('Responses API', 'ok'); }
+    else if (path.includes('/chat/completions')) { tag('Chat Completions', 'ok'); }
+
+    // Resource name from hostname
+    const res = host.split('.')[0];
+    tag('resource: ' + res);
+    tag('Azure');
+    return;
+  }
+
+  // ── NVIDIA ─────────────────────────────────────────────────────────
+  if (host === 'build.nvidia.com' || host.includes('nvidia.com') || host.includes('nim.') || host.endsWith('ngc.nvidia.com')) {
+    selectProvider('nvidia');
+
+    $('#nv_endpoint').value = url;
+
+    const modelMatch = path.match(/^\/([^?#]+?)\/?$/);
+    if (modelMatch && host === 'build.nvidia.com') {
+      const modelId = modelMatch[1];
+      // Try to find in model list, fall back to custom
+      const sel = $('#modelSelect');
+      let found = false;
+      if (sel) { for (const opt of sel.options) { if (opt.value === modelId) { sel.value = modelId; found = true; break; } } }
+      if (!found) { $('#modelCustom').value = modelId; }
+      tag('model: ' + modelId, 'ok');
+    }
+    tag('NVIDIA NIM');
+    return;
+  }
+
+  // ── AWS Bedrock ─────────────────────────────────────────────────────
+  if (host.includes('bedrock') && host.includes('amazonaws.com')) {
+    selectProvider('bedrock');
+
+    const regionMatch = host.match(/bedrock[^.]*\.([a-z0-9-]+)\.amazonaws\.com/);
+    if (regionMatch) { $('#br_region').value = regionMatch[1]; tag('region: ' + regionMatch[1], 'ok'); }
+    $('#br_endpoint').value = url;
+    tag('AWS Bedrock');
+    return;
+  }
+
+  tag('URL not recognised — supported: Azure, NVIDIA, Bedrock', 'warn');
+}
 function ic(name, cls='') { return SVG[name] ? `<span class="i ${cls}">${SVG[name]}</span>` : ''; }
+
+// Wire URL auto-detect
+(function() {
+  function doDetect() { autoDetectUrl($('#urlDetect')?.value || ''); }
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = $('#urlDetect');
+    if (el) {
+      el.addEventListener('input', doDetect);
+      el.addEventListener('paste', () => setTimeout(doDetect, 0));
+    }
+    // Also auto-detect when user pastes into az_endpoint field
+    const azEp = $('#az_endpoint');
+    if (azEp) {
+      azEp.addEventListener('paste', () => setTimeout(() => {
+        const v = azEp.value.trim();
+        if (!v) return;
+        const av = (() => { try { return new URL(v).searchParams.get('api-version'); } catch { return null; } })();
+        if (av && !$('#az_apiVersion').value) $('#az_apiVersion').value = av;
+        const dep = (() => { try { const m = new URL(v).pathname.match(/\/openai\/deployments\/([^\/]+)/); return m ? decodeURIComponent(m[1]) : null; } catch { return null; } })();
+        if (dep && !$('#az_deployment').value) $('#az_deployment').value = dep;
+      }, 0));
+    }
+  });
+})();
 const copyLabel = `${SVG.copy}<span>Copy</span>`;
 
 // ── Toast ──
