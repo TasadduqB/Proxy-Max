@@ -7,7 +7,7 @@
  * Handlers use res.writeHead + res.end instead of res.json / res.status.
  */
 
-const { OutputFilter, BUILTIN_FILTERS } = require('../output-filters/filter');
+const { BUILTIN_FILTERS } = require('../output-filters/filter');
 
 // ---- helpers ----
 
@@ -106,97 +106,9 @@ const DASHBOARD_ROUTES = {
     }
   },
 
-  // === COMPRESSION SETTINGS TAB ===
-  'POST /api/dashboard/test-compression': async (req, res, { compressor }) => {
-    try {
-      const { text, modes = ['lite', 'full', 'ultra'] } = await readBody(req);
-      if (!text) return jsonErr(res, 400, 'text required');
-      jsonOk(res, compressor.previewModes(text, modes));
-    } catch (err) {
-      jsonErr(res, 500, err.message);
-    }
-  },
-
-  'POST /api/dashboard/compress-text': async (req, res, { compressor }) => {
-    try {
-      const { text, mode = 'full' } = await readBody(req);
-      if (!text) return jsonErr(res, 400, 'text required');
-      const compressed = compressor.compress(text, mode);
-      const stats = compressor.getCompressionStats(text, compressed);
-      jsonOk(res, { original: text, compressed, stats });
-    } catch (err) {
-      jsonErr(res, 500, err.message);
-    }
-  },
-
-  // === CLI FILTERS TAB ===
-  'POST /api/dashboard/test-filter': async (req, res) => {
-    try {
-      const { output, filterName = null, filterConfig = null } = await readBody(req);
-      if (!output) return jsonErr(res, 400, 'output required');
-
-      let filter;
-      if (filterName && BUILTIN_FILTERS[filterName]) {
-        filter = new OutputFilter(BUILTIN_FILTERS[filterName]);
-      } else if (filterConfig) {
-        filter = new OutputFilter(filterConfig);
-      } else {
-        filter = new OutputFilter();
-      }
-
-      const filtered = filter.apply(output);
-      jsonOk(res, {
-        original_lines:  output.split('\n').length,
-        original_length: output.length,
-        filtered_lines:  filtered.split('\n').length,
-        filtered_length: filtered.length,
-        reduction_pct:   ((output.length - filtered.length) / output.length * 100).toFixed(1),
-        filtered_output: filtered.substring(0, 10000),
-      });
-    } catch (err) {
-      jsonErr(res, 500, err.message);
-    }
-  },
-
+  // Reference data consumed by the Optimization tab (read-only).
   'GET /api/dashboard/builtin-filters': (req, res) => {
     jsonOk(res, { available_filters: Object.keys(BUILTIN_FILTERS), filters: BUILTIN_FILTERS });
-  },
-
-  // === TOKEN COUNTER TAB ===
-  'POST /api/dashboard/estimate-tokens': async (req, res, { tokenCounter }) => {
-    try {
-      const { text, provider = 'openai', model = 'gpt-4o' } = await readBody(req);
-      if (!text) return jsonErr(res, 400, 'text required');
-      const tokens = tokenCounter.estimateTokens(text, { provider, model });
-      jsonOk(res, { text_length: text.length, estimated_tokens: tokens, tokens_per_char: (tokens / text.length).toFixed(3) });
-    } catch (err) {
-      jsonErr(res, 500, err.message);
-    }
-  },
-
-  // === COST CALCULATOR TAB ===
-  'POST /api/dashboard/calculate-cost': async (req, res, { pricingCalc }) => {
-    try {
-      const { inputTokens, outputTokens, modelName, cachedTokens = 0 } = await readBody(req);
-      if (inputTokens == null || outputTokens == null || !modelName) {
-        return jsonErr(res, 400, 'inputTokens, outputTokens, modelName required');
-      }
-      const result = pricingCalc.calculateCostNano(inputTokens, outputTokens, modelName, { cachedTokens });
-      if (result.error) return jsonErr(res, 400, result.error);
-      jsonOk(res, {
-        model: modelName,
-        input_tokens:   inputTokens,
-        output_tokens:  outputTokens,
-        cached_tokens:  cachedTokens,
-        total_tokens:   inputTokens + outputTokens,
-        cost_usd:       result.cost_usd.toFixed(9),
-        cost_nano_usd:  result.cost_nano_usd,
-        cost_formatted: pricingCalc.formatCost(result.cost_nano_usd),
-        breakdown:      result.breakdown,
-      });
-    } catch (err) {
-      jsonErr(res, 500, err.message);
-    }
   },
 
   'GET /api/dashboard/supported-models': (req, res, { pricingCalc }) => {

@@ -132,7 +132,7 @@ const BUILTIN_FILTERS = {
     strip_lines_matching: ['^\\s*$', '^running \\d+ test', '^test .* ok$', '^   Compiling'],
     keep_lines_matching: ['^test .* FAILED', '^thread .* panicked', '^error:'],
     max_lines: 30,
-    on_empty: '✓ all tests passed',
+    on_empty: 'OK: all tests passed',
   },
 
   'cargo-build': {
@@ -140,7 +140,7 @@ const BUILTIN_FILTERS = {
     strip_lines_matching: ['^   Compiling', '^    Finished', '^Blocking waiting'],
     keep_lines_matching: ['^error', '^warning'],
     max_lines: 20,
-    on_empty: '✓ build successful',
+    on_empty: 'OK: build successful',
   },
 
   'git-status': {

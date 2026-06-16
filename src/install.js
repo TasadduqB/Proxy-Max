@@ -108,7 +108,9 @@ function detectNode() {
 }
 
 async function downloadPortableNode() {
-  const version = 'v20.18.0';
+  // v22 LTS ships the built-in `node:sqlite` module used for the persistent
+  // cache + analytics — no native compilation required.
+  const version = 'v22.12.0';
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const platform = process.platform === 'darwin' ? 'darwin'
     : process.platform === 'linux' ? 'linux'

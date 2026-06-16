@@ -19,32 +19,60 @@ const EMPTY_STORE = () => ({
 });
 
 class AnalyticsEngine {
-  constructor(dataPath = null) {
+  /**
+   * @param {string|null} dataPath  JSON file path (used when no SQLite store)
+   * @param {object|null} store     optional SqliteStore — analytics persist into
+   *                                 its `kv` table under 'analytics' when present
+   */
+  constructor(dataPath = null, store = null) {
     this.dataPath = dataPath || DATA_FILE;
+    this.store = store && store.ready() ? store : null;
     this.sessionId = null;
     this.sessionStartTime = null;
     this._store = null;
     this._load();
   }
 
+  backend() { return this.store ? this.store.backend : 'json-file'; }
+
   // ---- internal persistence ----
 
   _load() {
+    // Prefer the shared SQLite store when available.
+    if (this.store) {
+      try {
+        let parsed = this.store.kvGet('analytics');
+        // One-time migration: if the store has no analytics yet but a legacy
+        // JSON file exists, seed from it so prior history isn't lost.
+        if (!parsed) {
+          try {
+            const legacy = JSON.parse(fs.readFileSync(this.dataPath, 'utf8'));
+            if (legacy && (legacy.sessions || legacy.request_logs)) {
+              parsed = legacy;
+              this.store.kvSet('analytics', Object.assign(EMPTY_STORE(), legacy));
+            }
+          } catch { /* no legacy file */ }
+        }
+        this._store = parsed ? Object.assign(EMPTY_STORE(), parsed) : EMPTY_STORE();
+        return;
+      } catch { this._store = EMPTY_STORE(); return; }
+    }
     try {
       fs.mkdirSync(path.dirname(this.dataPath), { recursive: true });
     } catch { /* already exists */ }
-
     try {
       const raw = fs.readFileSync(this.dataPath, 'utf8');
-      const parsed = JSON.parse(raw);
-      // Ensure all top-level keys exist (forward-compat with old files).
-      this._store = Object.assign(EMPTY_STORE(), parsed);
+      this._store = Object.assign(EMPTY_STORE(), JSON.parse(raw));
     } catch {
       this._store = EMPTY_STORE();
     }
   }
 
   _save() {
+    if (this.store) {
+      try { this.store.kvSet('analytics', this._store); return; }
+      catch (e) { /* fall through to file */ }
+    }
     try {
       fs.mkdirSync(path.dirname(this.dataPath), { recursive: true });
       fs.writeFileSync(this.dataPath, JSON.stringify(this._store, null, 2), 'utf8');

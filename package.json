@@ -35,18 +35,16 @@
   "scripts": {
     "start": "node src/server.js",
     "launch": "node src/launch.js",
-    "doctor": "node src/install.js",
-    "test:panel": "node src/panel_test.js",
-    "dashboard": "node src/server.js --dashboard-only"
+    "doctor": "node src/install.js"
+  },
+  "comments": {
+    "sqlite": "Persistence uses Node's built-in node:sqlite (Node >=22.5) with an automatic JSON fallback on older runtimes — no native module to compile.",
+    "undici": "Auto-installed on first use if not present; the proxy falls back gracefully if it can't be installed."
   },
   "dependencies": {
     "undici": "^8.4.1",
-    "sqlite3": "^5.1.7",
     "js-tiktoken": "^1.0.13",
-    "toml": "^3.0.0",
-    "express": "^4.19.2",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5"
+    "toml": "^3.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

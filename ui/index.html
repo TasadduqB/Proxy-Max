@@ -26,9 +26,10 @@
   }
   a { color:var(--accent); text-decoration:none; }
   button { font:inherit; }
+  svg { display:block; }
 
   /* ── Layout ── */
-  .app { display:grid; grid-template-columns: 230px 1fr; min-height:100vh; }
+  .app { display:grid; grid-template-columns: 244px 1fr; min-height:100vh; }
   aside {
     border-right:1px solid var(--line);
     background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 100%);
@@ -38,29 +39,29 @@
   }
 
   /* ── Brand ── */
-  .brand { display:flex; align-items:center; gap:10px; padding:4px 4px 16px; border-bottom:1px solid var(--line); margin-bottom:12px; }
+  .brand { display:flex; align-items:center; gap:11px; padding:4px 6px 16px; border-bottom:1px solid var(--line); margin-bottom:10px; }
   .brand .logo {
-    width:32px; height:32px; border-radius:8px; flex-shrink:0;
+    width:34px; height:34px; border-radius:9px; flex-shrink:0;
     background: conic-gradient(from 220deg at 50% 50%, var(--accent), var(--accent2), var(--accent3), var(--accent));
     display:flex; align-items:center; justify-content:center;
-    font-weight:800; font-size:15px; color:#0a0c12;
     box-shadow: 0 6px 18px rgba(122,162,255,.22);
   }
-  .brand .name { font-weight:700; font-size:14px; letter-spacing:.2px; line-height:1.2; }
+  .brand .logo svg { width:18px; height:18px; color:#0a0c12; }
+  .brand .name { font-weight:700; font-size:14.5px; letter-spacing:.2px; line-height:1.2; }
   .brand .ver  { color:var(--dim); font-size:10.5px; }
 
   /* ── Nav ── */
   nav { display:flex; flex-direction:column; gap:2px; flex:1; }
-  .nav-section { color:var(--dim); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; padding:12px 8px 5px; }
+  .nav-section { color:var(--dim); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; padding:13px 8px 5px; }
   .navitem {
-    display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px;
+    display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px;
     color:var(--mute); cursor:pointer; user-select:none; font-size:13.5px; font-weight:500;
     border:1px solid transparent; transition:.12s;
   }
   .navitem:hover { color:var(--text); background:rgba(255,255,255,.04); }
   .navitem.active { color:var(--text); background:var(--panel2); border-color:var(--line2); }
-  .navitem .ic { width:16px; height:16px; flex-shrink:0; opacity:.8; }
-  .navitem.active .ic { opacity:1; }
+  .navitem svg { width:17px; height:17px; flex-shrink:0; opacity:.75; }
+  .navitem.active svg { opacity:1; color:var(--accent); }
 
   /* ── Side footer ── */
   .side-foot { padding-top:10px; border-top:1px solid var(--line); }
@@ -76,10 +77,10 @@
   .health .value { font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   /* ── Main ── */
-  main { padding: 24px clamp(16px, 3.5vw, 40px) 80px; max-width: 1080px; }
-  h1 { font-size:20px; font-weight:700; margin:0 0 3px; letter-spacing:.1px; }
+  main { padding: 24px clamp(16px, 3.5vw, 40px) 80px; max-width: 1140px; }
+  h1 { font-size:21px; font-weight:700; margin:0 0 3px; letter-spacing:.1px; }
   .sub { color:var(--mute); font-size:13px; margin-bottom:16px; line-height:1.5; }
-  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:14px; }
+  .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:16px; }
   .topbar .pills { display:flex; gap:6px; flex-wrap:wrap; padding-top:4px; }
 
   /* ── Pills ── */
@@ -97,6 +98,7 @@
   }
   .card:focus-within { border-color: var(--line2); }
   .card h3 { margin:0 0 12px; font-size:13.5px; font-weight:600; letter-spacing:.15px; display:flex; align-items:center; gap:8px; }
+  .card h3 svg { width:16px; height:16px; opacity:.7; }
   .card h3 .badge {
     font-size:10px; padding:2px 7px; border-radius:999px;
     background:var(--panel3); color:var(--mute); border:1px solid var(--line2);
@@ -105,6 +107,7 @@
   .card h3 .badge.ok   { background:rgba(61,220,151,.12);  color:var(--ok);   border-color:rgba(61,220,151,.3); }
   .card h3 .badge.warn { background:rgba(255,181,71,.12);  color:var(--warn); border-color:rgba(255,181,71,.3); }
   .card h3 .badge.err  { background:rgba(255,107,107,.12); color:var(--err);  border-color:rgba(255,107,107,.3); }
+  .card h3 .spacer { flex:1; }
 
   /* ── Provider source cards ── */
   .src-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
@@ -147,6 +150,7 @@
     padding:9px 15px; font-weight:600; font-size:13.5px; cursor:pointer; transition:.12s;
     white-space:nowrap;
   }
+  .btn svg { width:15px; height:15px; }
   .btn:hover { filter:brightness(1.08); }
   .btn.secondary { background:transparent; color:var(--text); border:1px solid var(--line2); }
   .btn.secondary:hover { background:var(--panel2); border-color:var(--accent); }
@@ -159,13 +163,13 @@
   .actions { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; align-items:center; }
 
   /* ── Key-value rows ── */
-  .kv { display:grid; grid-template-columns: 140px 1fr; gap:5px 12px; font-size:13px; align-items:start; }
+  .kv { display:grid; grid-template-columns: 150px 1fr; gap:5px 12px; font-size:13px; align-items:start; }
   .kv .k { color:var(--mute); font-size:11.5px; letter-spacing:.04em; padding-top:1px; }
   .kv .v { font-family: ui-monospace,"SF Mono",Menlo,Consolas,monospace; word-break: break-all; }
   .kv .v.ok  { color:var(--ok);  }
   .kv .v.bad { color:var(--err); }
 
-  /* ── Check rows (component list) ── */
+  /* ── Check rows ── */
   .check {
     display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:11px 13px; border:1px solid var(--line); border-radius:10px;
@@ -187,7 +191,7 @@
   .cmd-wrap { position:relative; }
   pre.cmd {
     background:#04060b; border:1px solid var(--line); border-radius:10px;
-    padding:13px 14px; padding-right:80px; overflow:auto; margin:0;
+    padding:13px 14px; padding-right:88px; overflow:auto; margin:0;
     font-size:12.5px; color:#cfd5e3; font-family: ui-monospace,Menlo,Consolas,monospace;
     line-height:1.6; white-space:pre;
   }
@@ -195,12 +199,13 @@
     position:absolute; top:9px; right:9px;
     background:var(--panel3); border:1px solid var(--line2); color:var(--mute);
     border-radius:6px; padding:4px 9px; font-size:11px; cursor:pointer; transition:.12s;
-    display:flex; align-items:center; gap:4px; font-family:inherit;
+    display:flex; align-items:center; gap:5px; font-family:inherit;
   }
+  .copy-btn svg { width:13px; height:13px; }
   .copy-btn:hover { color:var(--text); border-color:var(--accent); background:var(--panel2); }
   .copy-btn.copied { color:var(--ok); border-color:rgba(61,220,151,.4); }
 
-  /* ── Console / log ── */
+  /* ── Console ── */
   .console {
     background:#04060b; border:1px solid var(--line); border-radius:10px;
     padding:12px 14px; font-family: ui-monospace,Menlo,Consolas,monospace; font-size:12.5px;
@@ -219,15 +224,20 @@
   }
   .toast.show { opacity:1; transform:translateY(0); }
   .small { font-size:12px; color:var(--mute); }
+  .mute { color:var(--mute); }
   .ok   { color:var(--ok);   }
   .err  { color:var(--err);  }
   .warn { color:var(--warn); }
+  .mono { font-family:ui-monospace,Menlo,Consolas,monospace; }
   hr { border:0; border-top:1px solid var(--line); margin:14px 0; }
   .hide { display:none !important; }
   .view { display:none; }
   .view.active { display:block; }
   .view.active > * { animation: pop .2s ease both; }
   @keyframes pop { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+  .i { display:inline-flex; vertical-align:-2px; }
+  .i svg { width:14px; height:14px; }
+  .i.ok svg { color:var(--ok); } .i.err svg { color:var(--err); } .i.warn svg { color:var(--warn); }
 
   /* ── Tabs ── */
   .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:14px; }
@@ -247,22 +257,16 @@
     margin-bottom:12px; font-size:13px;
   }
   .launch-strip .ic { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .launch-strip .ic svg { width:16px; height:16px; }
   .launch-strip.ok   { border-color:rgba(61,220,151,.3);  background:rgba(61,220,151,.06);  }
   .launch-strip.ok   .ic { background:rgba(61,220,151,.15); color:var(--ok);  }
   .launch-strip.warn { border-color:rgba(255,181,71,.3);  background:rgba(255,181,71,.06);  }
   .launch-strip.warn .ic { background:rgba(255,181,71,.15); color:var(--warn); }
 
   /* ── Pool ── */
-  .pool-row {
-    display:flex; align-items:center; gap:10px; padding:9px 0;
-    border-bottom:1px solid var(--line);
-  }
+  .pool-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); }
   .pool-row:last-child { border-bottom:0; }
-  .pool-prov {
-    width:22px; height:22px; border-radius:5px; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-    font-size:10px; font-weight:800; color:#fff;
-  }
+  .pool-prov { width:22px; height:22px; border-radius:5px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; color:#fff; }
   .pool-prov.bedrock { background:var(--bedrock); }
   .pool-prov.azure   { background:var(--azure);   }
   .pool-prov.nvidia  { background:var(--nvidia);  }
@@ -271,16 +275,68 @@
   .pool-model { font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:ui-monospace,Menlo,Consolas,monospace; }
   .pool-stat  { font-size:11px; color:var(--mute); white-space:nowrap; flex-shrink:0; }
   .pool-row.cooled { opacity:.55; }
-  .pool-row.cooled .pool-label::after { content:' ⏸'; font-size:10px; color:var(--warn); }
-  .cooldown-badge { font-size:10px; color:var(--warn); background:rgba(255,181,71,.12); border:1px solid rgba(255,181,71,.25); border-radius:4px; padding:1px 5px; flex-shrink:0; }
-  .btn-remove { background:none; border:none; color:var(--err); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; opacity:.7; }
+  .cooldown-badge { font-size:10px; color:var(--warn); background:rgba(255,181,71,.12); border:1px solid rgba(255,181,71,.25); border-radius:4px; padding:1px 6px; flex-shrink:0; }
+  .btn-remove { background:none; border:none; color:var(--err); cursor:pointer; padding:2px 4px; line-height:1; flex-shrink:0; opacity:.6; display:flex; }
+  .btn-remove svg { width:15px; height:15px; }
   .btn-remove:hover { opacity:1; }
 
+  /* ── Dashboard stat cards ── */
+  .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:6px; }
+  .stat {
+    background: linear-gradient(160deg, rgba(255,255,255,.03) 0%, rgba(255,255,255,0) 60%), var(--panel);
+    border:1px solid var(--line); border-radius:14px; padding:16px;
+  }
+  .stat .label { display:flex; align-items:center; gap:7px; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+  .stat .label svg { width:14px; height:14px; opacity:.7; }
+  .stat .value { font-size:25px; font-weight:700; letter-spacing:-.5px; margin-top:8px; }
+  .stat .value.accent { color:var(--accent3); }
+  .stat .value.warn { color:var(--warn); }
+  .stat .delta { font-size:11.5px; color:var(--mute); margin-top:3px; }
+
+  /* ── Data table ── */
+  table.data { width:100%; border-collapse:collapse; font-size:13px; }
+  table.data th { text-align:left; color:var(--dim); font-weight:500; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:7px 10px; border-bottom:1px solid var(--line2); }
+  table.data td { padding:8px 10px; border-bottom:1px solid var(--line); }
+  table.data tr:last-child td { border-bottom:0; }
+  table.data td.num { text-align:right; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; }
+  .bar { height:5px; border-radius:3px; background:var(--accent); }
+  .bar-track { background:var(--panel3); border-radius:3px; overflow:hidden; height:5px; margin-top:4px; }
+
+  /* ── Optimization toggle rows ── */
+  .opt-row { display:flex; align-items:flex-start; gap:14px; padding:15px 0; border-bottom:1px solid var(--line); }
+  .opt-row:last-child { border-bottom:0; }
+  .opt-main { flex:1; min-width:0; }
+  .opt-title { font-weight:600; font-size:13.5px; display:flex; align-items:center; gap:8px; }
+  .opt-title svg { width:15px; height:15px; opacity:.8; }
+  .opt-tag { font-size:9.5px; padding:2px 6px; border-radius:999px; letter-spacing:.05em; text-transform:uppercase; font-weight:600; }
+  .opt-tag.safe { background:rgba(61,220,151,.12); color:var(--ok); border:1px solid rgba(61,220,151,.3); }
+  .opt-tag.lossy { background:rgba(255,181,71,.12); color:var(--warn); border:1px solid rgba(255,181,71,.3); }
+  .opt-desc { color:var(--mute); font-size:12.5px; margin-top:4px; line-height:1.5; }
+  .opt-sub { margin-top:12px; padding:12px; border:1px solid var(--line); border-radius:9px; background:var(--panel2); display:none; }
+  .opt-row.on .opt-sub { display:block; }
+  .opt-sub label { margin-top:0; }
+  .opt-sub .grid2 { gap:12px; }
+  .opt-check { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12.5px; color:var(--text); cursor:pointer; }
+  .opt-check input { width:auto; }
+
+  /* ── Switch ── */
+  .switch { position:relative; display:inline-block; width:42px; height:23px; flex-shrink:0; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider { position:absolute; cursor:pointer; inset:0; background:var(--panel3); border:1px solid var(--line2); border-radius:999px; transition:.18s; }
+  .slider:before { content:""; position:absolute; height:15px; width:15px; left:3px; top:3px; background:var(--mute); border-radius:50%; transition:.18s; }
+  .switch input:checked + .slider { background:rgba(122,162,255,.25); border-color:var(--accent); }
+  .switch input:checked + .slider:before { transform:translateX(19px); background:var(--accent); }
+
+  .link-btn { color:var(--accent); cursor:pointer; text-decoration:underline; }
+  kbd { background:var(--panel3); border:1px solid var(--line2); border-radius:4px; padding:1px 5px; font-size:11.5px; font-family:inherit; }
+
+  @media (max-width:980px) { .stats-grid { grid-template-columns:repeat(2,1fr); } }
   @media (max-width:860px) {
     .app { grid-template-columns: 1fr; }
     aside { position:relative; height:auto; border-right:0; border-bottom:1px solid var(--line); }
     .src-grid { grid-template-columns:1fr; }
     .grid2 { grid-template-columns:1fr; }
+    .stats-grid { grid-template-columns:1fr; }
   }
 </style>
 </head>
@@ -288,7 +344,9 @@
 <div class="app">
   <aside>
     <div class="brand">
-      <div class="logo">P</div>
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
       <div>
         <div class="name">Proxy-Max</div>
         <div class="ver">Anthropic-compatible router</div>
@@ -296,30 +354,39 @@
     </div>
 
     <nav>
+      <div class="nav-section">Monitor</div>
+      <div class="navitem" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg>
+        Dashboard
+      </div>
       <div class="nav-section">Configure</div>
       <div class="navitem active" data-view="provider">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         Provider
       </div>
       <div class="navitem" data-view="pool">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         Model Pool
       </div>
+      <div class="navitem" data-view="optimization">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        Optimization
+      </div>
       <div class="navitem" data-view="models">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6"/><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
         Model Catalog
       </div>
       <div class="navitem" data-view="launch">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
         Launch CLI
       </div>
       <div class="nav-section">Manage</div>
       <div class="navitem" data-view="system">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.41 13.74M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
         System
       </div>
       <div class="navitem" data-view="logs">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h5"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
         Diagnostics
       </div>
     </nav>
@@ -337,6 +404,102 @@
 
   <main>
 
+    <!-- ══ DASHBOARD VIEW ══ -->
+    <section class="view" data-view="dashboard">
+      <div class="topbar">
+        <div>
+          <h1>Dashboard</h1>
+          <div class="sub">Live token, cost and savings analytics. Every optimization runs automatically inside the proxy — nothing to paste here.</div>
+        </div>
+        <div class="pills">
+          <span class="pill" id="dashStorePill"><span class="dot"></span>store: —</span>
+          <span class="pill" id="dashLivePill"><span class="dot"></span>auto-refresh</span>
+          <button class="btn secondary sm" onclick="loadDashboard()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="label">Requests routed</div>
+          <div class="value" id="dashRequests">—</div>
+          <div class="delta" id="dashRequestsDelta">this session</div>
+        </div>
+        <div class="stat">
+          <div class="label">Tokens saved</div>
+          <div class="value accent" id="dashTokensSaved">—</div>
+          <div class="delta">est. across optimizers</div>
+        </div>
+        <div class="stat">
+          <div class="label">Est. cost saved</div>
+          <div class="value accent" id="dashCostSaved">—</div>
+          <div class="delta" id="dashSpendDelta">vs. unoptimized</div>
+        </div>
+        <div class="stat">
+          <div class="label">Cache hit rate</div>
+          <div class="value" id="dashCacheHitRate">—</div>
+          <div class="delta" id="dashCacheHitsDelta">response cache</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/></svg>
+            Token usage <span class="badge" id="dashUsageScope">lifetime</span>
+          </h3>
+          <div id="dashUsage" class="kv"><div class="small mute">Loading…</div></div>
+        </div>
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+            Response cache
+            <span class="spacer"></span>
+            <button class="btn secondary sm" onclick="clearCache()">Clear</button>
+          </h3>
+          <div id="dashCache" class="kv"><div class="small mute">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Optimization activity
+          <span class="spacer"></span>
+          <span class="badge" id="optActiveBadge">—</span>
+        </h3>
+        <div id="optActivity" class="kv"><div class="small mute">Loading…</div></div>
+        <div class="small mute" style="margin-top:10px">Tune any of these on the <span class="link-btn" onclick="navTo('optimization')">Optimization</span> tab.</div>
+      </div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+          Cost &amp; tokens by model
+        </h3>
+        <div id="dashTokenTable"><div class="small mute">No requests yet this session.</div></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Spend by provider
+          </h3>
+          <div id="dashCostTable"><div class="small mute">No data yet.</div></div>
+        </div>
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            Recent requests
+          </h3>
+          <div id="dashRecent"><div class="small mute">No requests yet.</div></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ══ PROVIDER VIEW ══ -->
     <section class="view active" data-view="provider">
       <div class="topbar">
@@ -349,7 +512,6 @@
         </div>
       </div>
 
-      <!-- Step 1 – Source -->
       <div class="card">
         <h3>1. Source <span class="badge" id="srcBadge">choose one</span></h3>
         <div class="src-grid">
@@ -363,15 +525,13 @@
           </div>
           <div class="src" data-p="nvidia">
             <div class="name"><span class="dot"></span>NVIDIA NIM</div>
-            <div class="desc">build.nvidia.com — DeepSeek V4, Nemotron 3, Kimi K2.6, Qwen 3.5, GLM 5.1…</div>
+            <div class="desc">build.nvidia.com — DeepSeek, Nemotron, Kimi, Qwen, GLM…</div>
           </div>
         </div>
       </div>
 
-      <!-- Step 2 – Model & credentials -->
       <div class="card hide" id="formCard">
         <h3>2. Model &amp; credentials <span class="badge" id="provBadge"></span></h3>
-
         <label>Model</label>
         <div class="row">
           <select id="modelSelect" style="flex:2; min-width:240px"></select>
@@ -381,62 +541,41 @@
         <div id="azureFields" class="hide">
           <div class="grid2">
             <div>
-              <label>Endpoint <span class="small">(base URL or full Target URI from Azure portal)</span></label>
+              <label>Endpoint <span class="small">(base URL or full Target URI)</span></label>
               <input id="az_endpoint" placeholder="https://my-resource.cognitiveservices.azure.com" />
             </div>
-            <div>
-              <label>API key</label>
-              <input id="az_apiKey" type="password" placeholder="••••••••" />
-            </div>
+            <div><label>API key</label><input id="az_apiKey" type="password" placeholder="••••••••" /></div>
           </div>
           <div class="grid2">
             <div>
-              <label>Deployment name <span class="small">(blank for direct Foundry inference)</span></label>
+              <label>Deployment name <span class="small">(blank for direct Foundry)</span></label>
               <input id="az_deployment" placeholder="my-gpt4o-deploy" />
             </div>
-            <div>
-              <label>API version</label>
-              <input id="az_apiVersion" placeholder="2024-10-21" />
-            </div>
+            <div><label>API version</label><input id="az_apiVersion" placeholder="2024-10-21" /></div>
           </div>
         </div>
 
         <div id="nvidiaFields" class="hide">
           <div class="grid2">
             <div>
-              <label>Endpoint <span class="small">(paste a build.nvidia.com model URL or leave default)</span></label>
+              <label>Endpoint <span class="small">(paste a build.nvidia.com URL or leave default)</span></label>
               <input id="nv_endpoint" placeholder="https://integrate.api.nvidia.com/v1" />
             </div>
-            <div>
-              <label>API key</label>
-              <input id="nv_apiKey" type="password" placeholder="nvapi-..." />
-            </div>
+            <div><label>API key</label><input id="nv_apiKey" type="password" placeholder="nvapi-..." /></div>
           </div>
           <div class="small" style="margin-top:6px">Tip: paste any <a href="https://build.nvidia.com/models" target="_blank" rel="noopener">build.nvidia.com/models</a> page URL — the model ID is auto-extracted.</div>
         </div>
 
         <div id="bedrockFields" class="hide">
           <div class="grid2">
-            <div>
-              <label>AWS region</label>
-              <input id="br_region" placeholder="us-east-1" />
-            </div>
-            <div>
-              <label>Endpoint <span class="small">(optional)</span></label>
-              <input id="br_endpoint" placeholder="https://bedrock-runtime.us-east-1.amazonaws.com" />
-            </div>
+            <div><label>AWS region</label><input id="br_region" placeholder="us-east-1" /></div>
+            <div><label>Endpoint <span class="small">(optional)</span></label><input id="br_endpoint" placeholder="https://bedrock-runtime.us-east-1.amazonaws.com" /></div>
           </div>
           <div class="grid2">
-            <div>
-              <label>AWS access key ID</label>
-              <input id="br_access" />
-            </div>
-            <div>
-              <label>AWS secret access key</label>
-              <input id="br_secret" type="password" placeholder="••••••••" />
-            </div>
+            <div><label>AWS access key ID</label><input id="br_access" /></div>
+            <div><label>AWS secret access key</label><input id="br_secret" type="password" placeholder="••••••••" /></div>
           </div>
-          <label>Session token <span class="small">(optional — for STS / SSO)</span></label>
+          <label>Session token <span class="small">(optional — STS / SSO)</span></label>
           <input id="br_token" type="password" placeholder="" />
         </div>
 
@@ -447,23 +586,14 @@
         </div>
       </div>
 
-      <!-- Step 3 – Rate limits -->
       <div class="card" id="limitsCard">
         <h3>3. Rate limits <span class="badge" id="limitsBadge">per 60 s</span></h3>
         <div class="sub">Throttle requests before they reach the upstream. Set 0 to disable a limit.</div>
         <div class="grid2">
-          <div>
-            <label>Tokens per minute (TPM)</label>
-            <input id="lim_tpm" type="number" min="0" step="1000" placeholder="1000000" />
-          </div>
-          <div>
-            <label>Requests per minute (RPM)</label>
-            <input id="lim_rpm" type="number" min="0" step="100" placeholder="10000" />
-          </div>
+          <div><label>Tokens per minute (TPM)</label><input id="lim_tpm" type="number" min="0" step="1000" placeholder="1000000" /></div>
+          <div><label>Requests per minute (RPM)</label><input id="lim_rpm" type="number" min="0" step="100" placeholder="10000" /></div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer">
-          <input id="lim_enabled" type="checkbox" style="width:auto" /> Enforce these limits
-        </label>
+        <label class="opt-check" style="margin-top:10px"><input id="lim_enabled" type="checkbox" /> Enforce these limits</label>
         <div class="actions">
           <button class="btn" id="limitsSaveBtn">Save limits</button>
           <span id="limitsResult" class="small"></span>
@@ -471,39 +601,35 @@
         <div class="small" id="limitsUsage" style="margin-top:6px;color:var(--dim)"></div>
       </div>
 
-      <!-- Step 4 – Launch -->
       <div class="card" id="launchCard">
         <h3>4. Launch <span class="badge" id="launchBadge">—</span></h3>
-
         <div id="launchNoConfig" class="hide">
-          <div class="small warn">↑ Configure a provider and save it first.</div>
+          <div class="small warn">Configure a provider above and save it first.</div>
         </div>
-
         <div id="launchNoClaude" class="hide">
           <div class="launch-strip warn">
-            <div class="ic">⚠</div>
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
             <div>
               <div style="font-weight:600">Anthropic CLI not installed</div>
-              <div class="small">Go to <span class="link-btn" onclick="navTo('system')">System page</span> to install it automatically.</div>
+              <div class="small">Go to the <span class="link-btn" onclick="navTo('system')">System page</span> to install it automatically.</div>
             </div>
           </div>
         </div>
-
         <div id="launchReady" class="hide">
           <div class="launch-strip ok" id="launchStrip">
-            <div class="ic">✓</div>
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
             <div style="min-width:0">
               <div style="font-weight:600">Claude CLI detected</div>
-              <div class="small" id="launchClaudePath" style="font-family:ui-monospace,Menlo,Consolas,monospace"></div>
+              <div class="small mono" id="launchClaudePath"></div>
             </div>
           </div>
           <div class="small" style="margin-bottom:8px">Paste into any terminal — paths are resolved for <strong id="launchPlatformLabel">your system</strong>:</div>
           <div class="cmd-wrap">
             <pre class="cmd" id="launchCmdPrimary"></pre>
-            <button class="copy-btn" data-copy-target="launchCmdPrimary">⎘ Copy</button>
+            <button class="copy-btn" data-copy-target="launchCmdPrimary"></button>
           </div>
           <div class="actions">
-            <button class="btn secondary sm" onclick="navTo('launch')">All shell variants →</button>
+            <button class="btn secondary sm" onclick="navTo('launch')">All shell variants</button>
           </div>
         </div>
       </div>
@@ -525,7 +651,7 @@
       <div class="card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
           <h3 style="margin:0;flex:1">Pool members</h3>
-          <button class="btn secondary sm" onclick="resetCircuits()" title="Clear all circuit-breaker cooldowns so every model is tried again immediately">Reset circuits</button>
+          <button class="btn secondary sm" onclick="resetCircuits()" title="Clear all circuit-breaker cooldowns">Reset circuits</button>
         </div>
         <div id="poolList"><div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div></div>
       </div>
@@ -533,14 +659,10 @@
       <div class="card">
         <h3>Add model to pool</h3>
         <div class="small" style="margin-bottom:12px;color:var(--mute)">
-          Each pool entry uses the credentials saved for that provider on the
-          <span class="link-btn" onclick="navTo('provider')" style="color:var(--accent);cursor:pointer">Provider page</span>.
-          Configure credentials there first, then add as many models as you like here.
+          Each entry uses the credentials saved for that provider on the
+          <span class="link-btn" onclick="navTo('provider')">Provider page</span>. Configure credentials there first.
         </div>
-
-        <!-- Credential status for selected provider -->
         <div id="poolCredStatus" style="margin-bottom:12px;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);font-size:12.5px"></div>
-
         <div class="grid2">
           <div>
             <label>Provider</label>
@@ -558,26 +680,167 @@
         </div>
         <label style="margin-top:10px">Label <span class="small">(optional — shown in logs)</span></label>
         <input id="poolLabel" placeholder="e.g. Nemotron Ultra" />
-
         <details style="margin-top:12px">
-          <summary style="cursor:pointer;font-size:12.5px;color:var(--dim);user-select:none">Override credentials for this entry <span class="small">(leave blank to use Provider page settings)</span></summary>
+          <summary style="cursor:pointer;font-size:12.5px;color:var(--dim)">Override credentials for this entry</summary>
           <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-            <div>
-              <label style="margin-bottom:4px">Endpoint URL <span class="small">(override)</span></label>
-              <input id="poolEntryEndpoint" placeholder="e.g. https://…/openai/responses?api-version=2025-04-01-preview" />
-            </div>
-            <div>
-              <label style="margin-bottom:4px">API Key <span class="small">(override)</span></label>
-              <input id="poolEntryApiKey" type="password" placeholder="leave blank to use saved key" />
-            </div>
+            <div><label style="margin-bottom:4px">Endpoint URL <span class="small">(override)</span></label><input id="poolEntryEndpoint" placeholder="https://…/openai/responses?api-version=…" /></div>
+            <div><label style="margin-bottom:4px">API Key <span class="small">(override)</span></label><input id="poolEntryApiKey" type="password" placeholder="leave blank to use saved key" /></div>
           </div>
         </details>
-
         <div class="actions" style="margin-top:12px">
           <button class="btn" onclick="addToPool()" id="poolAddBtn">Add to pool</button>
-          <button class="btn secondary" onclick="navTo('provider')" style="gap:6px">Configure credentials →</button>
+          <button class="btn secondary" onclick="navTo('provider')">Configure credentials</button>
           <span id="poolAddResult" class="small"></span>
         </div>
+      </div>
+    </section>
+
+    <!-- ══ OPTIMIZATION VIEW ══ -->
+    <section class="view" data-view="optimization">
+      <div class="topbar">
+        <div>
+          <h1>Optimization</h1>
+          <div class="sub">Every strategy here runs <strong>automatically inside the proxy</strong> on each request from the CLI — no copy/paste. All stages are <strong>enabled and tuned conservatively</strong> for maximum savings without breaking Claude Code's hooks, web search, subagents or tool use.</div>
+        </div>
+        <div class="pills">
+          <span class="pill" id="optSavedPill"><span class="dot"></span>—</span>
+        </div>
+      </div>
+
+      <div class="card" style="border-color:rgba(61,220,151,.25);background:linear-gradient(160deg,rgba(61,220,151,.05),transparent 60%),var(--panel)">
+        <div style="display:flex;gap:11px;align-items:flex-start">
+          <span class="i ok" style="margin-top:1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg></span>
+          <div class="small" style="color:var(--text)">
+            <strong>Everything on, tuned safe.</strong> The <span class="ok">lossless</span> stages — prompt caching (capped at Anthropic's 4-breakpoint limit so it can never error), the SQLite response cache, and ANSI stripping — carry zero risk. The <span class="warn">gentle</span> lossy stages use conservative settings (wide history window, large tool-description cap, mild prose mode) so they save tokens without starving the model. Dial any back if a workload misbehaves.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Cost-saving strategies
+          <span class="spacer"></span>
+          <button class="btn sm" id="optSaveBtn">Save settings</button>
+        </h3>
+
+        <!-- Prompt caching -->
+        <div class="opt-row" id="row_cache">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+              Prompt caching <span class="opt-tag safe">lossless · biggest win</span>
+            </div>
+            <div class="opt-desc">Injects Anthropic <span class="mono">cache_control</span> breakpoints on the system prompt and tool definitions (Bedrock). Repeated prefixes — which dominate every Claude Code turn — then cost ~10% of normal input. Only adds cache hints, never alters content, and respects Anthropic's 4-breakpoint limit so it can never break a request.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_cache"><span class="slider"></span></label>
+        </div>
+
+        <!-- Response cache (SQLite) -->
+        <div class="opt-row" id="row_responseCache">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6a9 3 0 0 0 18 0V5"/><path d="M3 11v6a9 3 0 0 0 18 0v-6"/></svg>
+              Response cache <span class="opt-tag safe">lossless · SQLite</span>
+            </div>
+            <div class="opt-desc">Stores each upstream response in a local SQLite database keyed by the exact request. An identical request replays the stored response verbatim (streaming included) at zero upstream cost. Lossless — it only avoids re-asking the same question.</div>
+            <div class="opt-sub">
+              <label>Time-to-live (minutes) <span class="small">(0 = never expire)</span></label>
+              <input id="opt_rc_ttl" type="number" min="0" step="5" placeholder="60" style="max-width:200px" />
+            </div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_responseCache"><span class="slider"></span></label>
+        </div>
+
+        <!-- Tool result filtering -->
+        <div class="opt-row" id="row_toolResults">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Tool-result filtering <span class="opt-tag safe">lossless (ANSI only)</span>
+            </div>
+            <div class="opt-desc">Strips ANSI colour/escape codes from terminal output before it re-enters context each turn. Escape codes are display-only, so this is content-preserving. The two extra sub-options below <em>are</em> lossy — leave them off for zero-risk operation.</div>
+            <div class="opt-sub">
+              <label class="opt-check"><input type="checkbox" id="opt_tr_ansi"> Strip ANSI / colour escape codes <span class="opt-tag safe" style="margin-left:4px">lossless</span></label>
+              <label class="opt-check"><input type="checkbox" id="opt_tr_blank"> Collapse repeated blank lines <span class="opt-tag lossy" style="margin-left:4px">lossy</span></label>
+              <label style="margin-top:10px">Max characters per tool result <span class="small">(0 = no truncation)</span></label>
+              <input id="opt_tr_maxChars" type="number" min="0" step="1000" placeholder="0" style="max-width:200px" />
+              <div class="small warn" style="margin-top:6px">Truncation can cut off command output or file contents — keep at 0 unless you accept that risk.</div>
+            </div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_toolResults"><span class="slider"></span></label>
+        </div>
+
+        <!-- History window -->
+        <div class="opt-row" id="row_history">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+              Conversation history window <span class="opt-tag lossy">lossy · opt-in</span>
+            </div>
+            <div class="opt-desc">Keeps a sliding window of recent turns plus the opening context, dropping the stale middle. Claude Code re-sends the full transcript each call, so this caps runaway long-session cost — but dropping turns can disrupt multi-turn reasoning and long-running subagent tasks. Off by default.</div>
+            <div class="opt-sub">
+              <div class="grid2">
+                <div><label>Max messages kept</label><input id="opt_hist_max" type="number" min="2" step="2" placeholder="80" /></div>
+                <div><label>Keep first N (opening context)</label><input id="opt_hist_keep" type="number" min="0" step="1" placeholder="4" /></div>
+              </div>
+            </div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_history"><span class="slider"></span></label>
+        </div>
+
+        <!-- Tool definition compression -->
+        <div class="opt-row" id="row_toolCompress">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              Tool-definition compression <span class="opt-tag lossy">lossy · opt-in</span>
+            </div>
+            <div class="opt-desc">Trims verbose tool descriptions sent with every request, preserving each tool's name and JSON schema exactly. Descriptions guide correct tool selection (web search, Task/subagents, hooks), so trimming them can reduce tool-calling accuracy. Off by default.</div>
+            <div class="opt-sub">
+              <label>Max description length (characters)</label>
+              <input id="opt_tc_maxlen" type="number" min="40" step="20" placeholder="600" style="max-width:200px" />
+              <label class="opt-check"><input type="checkbox" id="opt_tc_examples"> Strip "Examples:" / "Usage:" / "Note:" blocks</label>
+            </div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_toolCompress"><span class="slider"></span></label>
+        </div>
+
+        <!-- Prose compression -->
+        <div class="opt-row" id="row_compression">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              Prose compression <span class="opt-tag lossy">lossy · opt-in</span>
+            </div>
+            <div class="opt-desc">Rewrites system-prompt and message prose to drop filler words, articles and pleasantries. Highest raw reduction, but it edits the system prompt and your message text — which can weaken behavioural/tool-use guarantees and corrupt hook-injected content. Off by default; use on tolerant models only.</div>
+            <div class="opt-sub">
+              <label>Intensity mode</label>
+              <select id="opt_comp_mode" style="max-width:260px">
+                <option value="lite">Lite — drop filler words only</option>
+                <option value="full">Full — drop articles + short synonyms</option>
+                <option value="ultra">Ultra — + prose abbreviations</option>
+                <option value="wenyan-lite">Wényán Lite — classical compression</option>
+                <option value="wenyan-full">Wényán Full</option>
+                <option value="wenyan-ultra">Wényán Ultra</option>
+              </select>
+            </div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_compression"><span class="slider"></span></label>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="optSaveBtn2">Save settings</button>
+          <span id="optResult" class="small"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Live savings since startup
+        </h3>
+        <div id="optStatsLive" class="kv"><div class="small mute">Loading…</div></div>
       </div>
     </section>
 
@@ -592,10 +855,7 @@
           <input id="modelSearch" placeholder="filter…" style="max-width:220px;height:30px;padding:5px 10px;border-radius:999px"/>
         </div>
       </div>
-      <div class="card">
-        <h3>Catalog</h3>
-        <div id="modelsBrowser"></div>
-      </div>
+      <div class="card"><h3>Catalog</h3><div id="modelsBrowser"></div></div>
     </section>
 
     <!-- ══ LAUNCH CLI VIEW ══ -->
@@ -603,55 +863,32 @@
       <div class="topbar">
         <div>
           <h1>Launch CLI</h1>
-          <div class="sub">Commands to point the official <code>claude</code> CLI at this proxy. Paths are resolved from the running server.</div>
+          <div class="sub">Commands to point the official <code>claude</code> CLI at this proxy.</div>
         </div>
-        <div class="pills">
-          <span class="pill" id="launchPlatformPill">platform: —</span>
-        </div>
+        <div class="pills"><span class="pill" id="launchPlatformPill">platform: —</span></div>
       </div>
 
-      <div class="card" id="launchCliStatus">
-        <h3>Status</h3>
-        <div id="launchCliStatusBody" class="kv"></div>
-      </div>
+      <div class="card" id="launchCliStatus"><h3>Status</h3><div id="launchCliStatusBody" class="kv"></div></div>
 
       <div class="card">
         <div class="tabs" id="shellTabs">
-          <div class="tab active" data-shell="unix">macOS / Linux (bash/zsh)</div>
-          <div class="tab" data-shell="ps">Windows (PowerShell)</div>
-          <div class="tab" data-shell="wincmd">Windows (cmd.exe)</div>
-          <div class="tab" data-shell="boot">One-shot bootstrap</div>
+          <div class="tab active" data-shell="unix">macOS / Linux</div>
+          <div class="tab" data-shell="ps">PowerShell</div>
+          <div class="tab" data-shell="wincmd">cmd.exe</div>
+          <div class="tab" data-shell="boot">Bootstrap</div>
         </div>
-        <div class="tabpanel active" id="sp-unix">
-          <div class="cmd-wrap">
-            <pre class="cmd" id="cmdUnix"></pre>
-            <button class="copy-btn" data-copy-target="cmdUnix">⎘ Copy</button>
-          </div>
-        </div>
-        <div class="tabpanel" id="sp-ps">
-          <div class="cmd-wrap">
-            <pre class="cmd" id="cmdWin"></pre>
-            <button class="copy-btn" data-copy-target="cmdWin">⎘ Copy</button>
-          </div>
-        </div>
-        <div class="tabpanel" id="sp-wincmd">
-          <div class="cmd-wrap">
-            <pre class="cmd" id="cmdWinCmd"></pre>
-            <button class="copy-btn" data-copy-target="cmdWinCmd">⎘ Copy</button>
-          </div>
-        </div>
+        <div class="tabpanel active" id="sp-unix"><div class="cmd-wrap"><pre class="cmd" id="cmdUnix"></pre><button class="copy-btn" data-copy-target="cmdUnix"></button></div></div>
+        <div class="tabpanel" id="sp-ps"><div class="cmd-wrap"><pre class="cmd" id="cmdWin"></pre><button class="copy-btn" data-copy-target="cmdWin"></button></div></div>
+        <div class="tabpanel" id="sp-wincmd"><div class="cmd-wrap"><pre class="cmd" id="cmdWinCmd"></pre><button class="copy-btn" data-copy-target="cmdWinCmd"></button></div></div>
         <div class="tabpanel" id="sp-boot">
-          <div class="cmd-wrap">
-            <pre class="cmd" id="cmdBoot"></pre>
-            <button class="copy-btn" data-copy-target="cmdBoot">⎘ Copy</button>
-          </div>
-          <div class="small" style="margin-top:8px">The bootstrap script installs Node, npm, and the Anthropic CLI (admin or per-user), starts this proxy, then execs <code>claude</code>.</div>
+          <div class="cmd-wrap"><pre class="cmd" id="cmdBoot"></pre><button class="copy-btn" data-copy-target="cmdBoot"></button></div>
+          <div class="small" style="margin-top:8px">The bootstrap script installs Node, npm and the Anthropic CLI, starts this proxy, then execs <code>claude</code>.</div>
         </div>
       </div>
 
       <div class="card">
         <h3>VS Code integrated terminal</h3>
-        <div class="small" style="margin-bottom:10px">Open the VS Code terminal (<kbd>Ctrl+`</kbd> or <kbd>⌃`</kbd>) and paste the command for your shell above. The proxy must be running first.</div>
+        <div class="small" style="margin-bottom:10px">Open the terminal (<kbd>Ctrl+`</kbd> or <kbd>⌃`</kbd>) and paste the command for your shell. The proxy must be running first.</div>
         <div class="kv" style="margin-top:6px">
           <span class="k">Proxy address</span><span class="v" id="launchBase">—</span>
           <span class="k">Auth token</span><span class="v">proxy-max (any non-empty value)</span>
@@ -666,15 +903,10 @@
           <h1>System</h1>
           <div class="sub">Detect runtime, admin rights, the Anthropic CLI, and install anything missing.</div>
         </div>
-        <div class="pills">
-          <button class="btn secondary sm" id="refreshSys">Re-detect</button>
-        </div>
+        <div class="pills"><button class="btn secondary sm" id="refreshSys">Re-detect</button></div>
       </div>
 
-      <div class="card">
-        <h3>Runtime <span class="badge" id="osBadge">—</span></h3>
-        <div class="kv" id="sysKv"></div>
-      </div>
+      <div class="card"><h3>Runtime <span class="badge" id="osBadge">—</span></h3><div class="kv" id="sysKv"></div></div>
 
       <div class="card">
         <h3>Components</h3>
@@ -685,75 +917,39 @@
           <button class="btn secondary" id="installNode">Install Node + npm</button>
           <span class="small" id="installHint"></span>
         </div>
-        <div class="small" style="margin-top:10px;color:var(--dim)">
-          When admin rights aren't available, installs fall back to a per-user prefix (no <code>sudo</code> / no UAC) and a portable Node tarball.
-        </div>
+        <div class="small" style="margin-top:10px;color:var(--dim)">When admin rights aren't available, installs fall back to a per-user prefix and a portable Node tarball.</div>
       </div>
 
-      <div class="card">
-        <h3>Install console</h3>
-        <div class="console" id="installConsole">Idle.</div>
-      </div>
-
-      <div class="card">
-        <h3>Search PATH</h3>
-        <details>
-          <summary>PATH directories (<span id="pathCount">0</span>)</summary>
-          <pre class="cmd" style="margin-top:8px" id="pathList"></pre>
-        </details>
-      </div>
+      <div class="card"><h3>Install console</h3><div class="console" id="installConsole">Idle.</div></div>
+      <div class="card"><h3>Search PATH</h3><details><summary>PATH directories (<span id="pathCount">0</span>)</summary><pre class="cmd" style="margin-top:8px" id="pathList"></pre></details></div>
     </section>
 
     <!-- ══ DIAGNOSTICS VIEW ══ -->
     <section class="view" data-view="logs">
       <div class="topbar">
-        <div>
-          <h1>Diagnostics</h1>
-          <div class="sub">Request log and panel event testing.</div>
-        </div>
+        <div><h1>Diagnostics</h1><div class="sub">Request log — every routed call, its attempts and timings.</div></div>
       </div>
 
       <div class="card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <h3 style="margin:0;flex:1">Request Log</h3>
+          <h3 style="margin:0;flex:1">Request log</h3>
           <span id="logCount" class="small" style="color:var(--dim)"></span>
           <button class="btn secondary sm" onclick="loadLogs()">Refresh</button>
           <a class="btn secondary sm" href="/api/logs/file?lines=2000" target="_blank" download="requests.log">Download</a>
           <button class="btn danger sm" onclick="clearLogs()">Clear</button>
         </div>
         <div id="logFilePath" style="font-size:11px;color:var(--dim);font-family:ui-monospace,Menlo,Consolas,monospace;margin-bottom:10px;word-break:break-all"></div>
-        <div id="logTable" style="overflow-x:auto">
-          <div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Panel Event Test</h3>
-        <div class="actions" style="margin-top:0">
-          <button class="btn secondary sm" id="panelRefresh">Refresh</button>
-          <button class="btn sm" id="panelImpression">Send impression</button>
-          <button class="btn sm" id="panelClick">Send click</button>
-          <button class="btn danger sm" id="panelReset">Reset</button>
-        </div>
-        <div class="kv" style="margin-top:12px" id="panelSummary"></div>
-        <details style="margin-top:10px" open>
-          <summary>Latest events</summary>
-          <div class="cmd-wrap" style="margin-top:8px">
-            <pre class="cmd" id="panelEvents" style="padding-right:14px">(empty)</pre>
-          </div>
-        </details>
+        <div id="logTable" style="overflow-x:auto"><div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div></div>
       </div>
 
       <div class="card">
         <h3>API endpoints</h3>
         <div class="kv">
           <span class="k">Health</span><span class="v"><a href="/api/health" target="_blank">/api/health</a></span>
-          <span class="k">System</span><span class="v"><a href="/api/system" target="_blank">/api/system</a></span>
-          <span class="k">Models</span><span class="v"><a href="/api/models" target="_blank">/api/models</a></span>
+          <span class="k">Optimization</span><span class="v"><a href="/api/optimization" target="_blank">/api/optimization</a></span>
+          <span class="k">Opt stats</span><span class="v"><a href="/api/optimization/stats" target="_blank">/api/optimization/stats</a></span>
+          <span class="k">Analytics</span><span class="v"><a href="/api/dashboard/overview" target="_blank">/api/dashboard/overview</a></span>
           <span class="k">Config</span><span class="v"><a href="/api/config" target="_blank">/api/config</a> <span class="small">(secrets masked)</span></span>
-          <span class="k">Launch cmd</span><span class="v"><a href="/api/launch/command" target="_blank">/api/launch/command</a></span>
-          <span class="k">Panel event</span><span class="v">POST <a href="/api/panel/event" target="_blank">/api/panel/event</a></span>
-          <span class="k">Panel summary</span><span class="v"><a href="/api/panel/summary" target="_blank">/api/panel/summary</a></span>
           <span class="k">Request logs</span><span class="v"><a href="/api/logs" target="_blank">/api/logs</a></span>
         </div>
       </div>
@@ -764,14 +960,20 @@
 
 <div id="toast" class="toast"></div>
 
-<style>
-  .link-btn { color:var(--accent); cursor:pointer; text-decoration:underline; }
-  kbd { background:var(--panel3); border:1px solid var(--line2); border-radius:4px; padding:1px 5px; font-size:11.5px; font-family:inherit; }
-</style>
-
 <script>
 const $ = sel => document.querySelector(sel);
 const state = { provider:null, models:{}, config:{providers:{}}, system:null, launchInfo:null };
+
+// ── Inline SVG icon set (no emojis) ──
+const SVG = {
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  x:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
+  copy:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+};
+function ic(name, cls='') { return SVG[name] ? `<span class="i ${cls}">${SVG[name]}</span>` : ''; }
+const copyLabel = `${SVG.copy}<span>Copy</span>`;
 
 // ── Toast ──
 function toast(msg, ok=true) {
@@ -783,21 +985,26 @@ function toast(msg, ok=true) {
   t._h = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-// ── Routing ──
-let _poolTimer = null;
+// ── Routing (hash-aware) ──
+let _poolTimer = null, _dashTimer = null;
+const VIEWS = ['dashboard','provider','pool','optimization','models','launch','system','logs'];
 function navTo(view) {
+  if (!VIEWS.includes(view)) view = 'provider';
   for (const el of document.querySelectorAll('.navitem')) el.classList.toggle('active', el.dataset.view === view);
   for (const el of document.querySelectorAll('.view'))    el.classList.toggle('active', el.dataset.view === view);
+  if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
+
+  // per-view loaders
   if (view === 'system') refreshSystem();
   if (view === 'models') renderModelsBrowser();
-  if (view === 'logs')   { loadLogs(); refreshPanelTest(); }
+  if (view === 'logs')   loadLogs();
   if (view === 'launch') renderLaunchPage();
-  if (view === 'pool') {
-    loadPool();
-    if (!_poolTimer) _poolTimer = setInterval(loadPool, 5000);
-  } else {
-    clearInterval(_poolTimer); _poolTimer = null;
-  }
+  if (view === 'optimization') loadOptimization();
+
+  clearInterval(_poolTimer); _poolTimer = null;
+  clearInterval(_dashTimer); _dashTimer = null;
+  if (view === 'pool') { loadPool(); _poolTimer = setInterval(loadPool, 5000); }
+  if (view === 'dashboard') { loadDashboard(); _dashTimer = setInterval(loadDashboard, 6000); }
 }
 document.addEventListener('click', e => {
   const ni = e.target.closest('.navitem'); if (ni) navTo(ni.dataset.view);
@@ -813,8 +1020,8 @@ document.addEventListener('click', e => {
   if (!pre) return;
   navigator.clipboard.writeText(pre.textContent).then(() => {
     btn.classList.add('copied');
-    btn.textContent = '✓ Copied';
-    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = '⎘ Copy'; }, 1800);
+    btn.innerHTML = `${SVG.check}<span>Copied</span>`;
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = copyLabel; }, 1800);
   }).catch(() => toast('Copy failed — select and copy manually', false));
 });
 
@@ -823,6 +1030,12 @@ function switchShellTab(shell) {
   for (const t of document.querySelectorAll('#shellTabs .tab')) t.classList.toggle('active', t.dataset.shell === shell);
   for (const p of document.querySelectorAll('.tabpanel')) p.classList.toggle('active', p.id === `sp-${shell}`);
 }
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtNum(n) { n = Number(n)||0; return n.toLocaleString(); }
+function fmtUsd(n) { n = Number(n)||0; return '$' + (n < 0.01 ? n.toFixed(6) : n.toFixed(4)); }
 
 // ── Bootstrap ──
 async function loadAll() {
@@ -838,8 +1051,250 @@ async function loadAll() {
   setHealth(h);
   if (l) applyLimits(l);
   if (c.provider) selectProvider(c.provider);
-  poolProviderChanged(); // pre-populate datalist for pool form
+  poolProviderChanged();
   await loadLaunchInfo();
+  // Initialise copy buttons.
+  for (const b of document.querySelectorAll('.copy-btn')) if (!b.innerHTML.trim()) b.innerHTML = copyLabel;
+  // Honour the URL hash on first load (e.g. /#dashboard).
+  const initial = location.hash.slice(1);
+  navTo(VIEWS.includes(initial) ? initial : 'provider');
+}
+window.addEventListener('hashchange', () => navTo(location.hash.slice(1)));
+
+// ════════════════════ DASHBOARD ════════════════════
+async function loadDashboard() {
+  try {
+    const [stats, overview, cost, tokens] = await Promise.all([
+      fetch('/api/optimization/stats').then(r=>r.json()).catch(()=>({})),
+      fetch('/api/dashboard/overview').then(r=>r.json()).catch(()=>({})),
+      fetch('/api/dashboard/cost-analytics').then(r=>r.json()).catch(()=>({})),
+      fetch('/api/dashboard/token-usage').then(r=>r.json()).catch(()=>({})),
+    ]);
+    renderDashboard(stats, overview, cost, tokens);
+  } catch (e) { /* keep last render */ }
+}
+
+function renderDashboard(stats, overview, cost, tokens) {
+  const sess = overview.current_session || {};
+  const life = overview.lifetime || {};
+  $('#dashRequests').textContent = fmtNum(sess.total_requests || 0);
+  $('#dashRequestsDelta').textContent = `${fmtNum(life.total_requests || 0)} lifetime`;
+  $('#dashTokensSaved').textContent = fmtNum(stats.estTokensSaved || life.total_tokens_saved || 0);
+  $('#dashCostSaved').textContent = fmtUsd(stats.estCostSavedUsd || 0);
+
+  const cache = stats.cache || {};
+  $('#dashCacheHitRate').textContent = `${Math.round((cache.hitRate || 0) * 100)}%`;
+  $('#dashCacheHitsDelta').textContent = `${fmtNum(stats.responseCacheHits || 0)} hits / ${fmtNum(stats.responseCacheMisses || 0)} miss`;
+
+  const spent = (life.total_cost_nano_usd || 0) / 1e9;
+  $('#dashSpendDelta').textContent = `${fmtUsd(spent)} spent lifetime`;
+
+  // Store backend pill
+  const storePill = $('#dashStorePill');
+  if (storePill) {
+    const be = stats.storeBackend || '—';
+    storePill.innerHTML = `<span class="dot" style="background:${be==='sqlite'?'var(--ok)':'var(--warn)'}"></span>store: ${escapeHtml(be)}`;
+  }
+
+  // Token usage (Anthropic-style): lifetime totals
+  $('#dashUsage').innerHTML = [
+    ['Input tokens',  fmtNum(life.total_input_tokens || 0)],
+    ['Output tokens', fmtNum(life.total_output_tokens || 0)],
+    ['Total tokens',  fmtNum((life.total_input_tokens || 0) + (life.total_output_tokens || 0))],
+    ['Cached tokens served', fmtNum(cache.cachedTokens || 0)],
+    ['Total spend',   fmtUsd(spent)],
+    ['Sessions',      fmtNum(life.total_sessions || 0)],
+  ].map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+
+  // Response cache detail
+  $('#dashCache').innerHTML = [
+    ['Hits',            fmtNum(stats.responseCacheHits || 0)],
+    ['Misses',          fmtNum(stats.responseCacheMisses || 0)],
+    ['Hit rate',        `${Math.round((cache.hitRate || 0) * 100)}%`],
+    ['Entries stored',  fmtNum(cache.entries || 0)],
+    ['Tokens served from cache', fmtNum(stats.responseCacheTokensSaved || 0)],
+    ['Cost avoided',    fmtUsd((stats.responseCacheCostSavedNano || 0) / 1e9)],
+  ].map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+
+  // Optimization activity breakdown
+  const rows = [
+    ['Requests routed',          fmtNum(stats.requests || 0)],
+    ['Tool results filtered',    fmtNum(stats.toolResultsFiltered || 0)],
+    ['Tool-result chars saved',  fmtNum(stats.toolResultCharsSaved || 0)],
+    ['History messages trimmed', fmtNum(stats.historyMessagesTrimmed || 0)],
+    ['Tool-def chars saved',     fmtNum(stats.toolDescCharsSaved || 0)],
+    ['Prose chars saved',        fmtNum(stats.proseCharsSaved || 0)],
+    ['Cache breakpoints injected', fmtNum(stats.cacheBreakpointsInjected || 0)],
+  ];
+  $('#optActivity').innerHTML = rows.map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+  const anyActive = (stats.requests || 0) > 0;
+  const badge = $('#optActiveBadge');
+  badge.textContent = anyActive ? 'active' : 'idle';
+  badge.className = 'badge ' + (anyActive ? 'ok' : '');
+
+  // by-model table
+  const models = (tokens.by_model || []).slice(0, 8);
+  const costModels = {};
+  for (const m of (cost.by_model || [])) costModels[m.model] = m;
+  if (models.length) {
+    const maxCost = Math.max(...models.map(m => (costModels[m.model]?.total_cost_nano || 0)), 1);
+    $('#dashTokenTable').innerHTML = `<table class="data">
+      <thead><tr><th>Model</th><th class="num">Reqs</th><th class="num">In</th><th class="num">Out</th><th class="num">Cost</th><th style="width:120px">Spend</th></tr></thead>
+      <tbody>${models.map(m => {
+        const c = costModels[m.model] || {};
+        const pct = Math.round(((c.total_cost_nano||0)/maxCost)*100);
+        return `<tr>
+          <td class="mono" style="font-size:12px">${escapeHtml(m.model)}</td>
+          <td class="num">${fmtNum(m.request_count)}</td>
+          <td class="num">${fmtNum(m.total_input)}</td>
+          <td class="num">${fmtNum(m.total_output)}</td>
+          <td class="num">${escapeHtml(c.cost_formatted || '$0')}</td>
+          <td><div class="bar-track"><div class="bar" style="width:${pct}%"></div></div></td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  } else {
+    $('#dashTokenTable').innerHTML = '<div class="small mute">No requests yet this session.</div>';
+  }
+
+  // by-provider
+  const provs = cost.by_provider || [];
+  if (provs.length) {
+    $('#dashCostTable').innerHTML = `<table class="data">
+      <thead><tr><th>Provider</th><th class="num">Reqs</th><th class="num">Cost</th></tr></thead>
+      <tbody>${provs.map(p => `<tr>
+        <td>${escapeHtml(p.provider)}</td>
+        <td class="num">${fmtNum(p.request_count)}</td>
+        <td class="num">${escapeHtml(p.cost_formatted || '$0')}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } else {
+    $('#dashCostTable').innerHTML = '<div class="small mute">No data yet.</div>';
+  }
+
+  // recent
+  const recent = overview.recent_requests || [];
+  if (recent.length) {
+    $('#dashRecent').innerHTML = recent.slice(0, 8).map(r => {
+      const t = new Date(r.timestamp || 0).toLocaleTimeString();
+      return `<div style="display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)">
+        <span class="small mono" style="color:var(--dim);flex-shrink:0">${t}</span>
+        <span class="mono" style="font-size:11.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.model||'?')}</span>
+        <span class="small" style="flex-shrink:0">${fmtNum((r.input_tokens||0)+(r.output_tokens||0))} tok</span>
+      </div>`;
+    }).join('');
+  } else {
+    $('#dashRecent').innerHTML = '<div class="small mute">No requests yet.</div>';
+  }
+}
+
+async function clearCache() {
+  try { await fetch('/api/cache/clear', { method:'POST' }); toast('Response cache cleared'); loadDashboard(); }
+  catch (e) { toast(e.message, false); }
+}
+
+// ════════════════════ OPTIMIZATION ════════════════════
+function wireOptToggles() {
+  const pairs = [
+    ['opt_cache','row_cache'], ['opt_responseCache','row_responseCache'],
+    ['opt_toolResults','row_toolResults'],
+    ['opt_history','row_history'], ['opt_toolCompress','row_toolCompress'],
+    ['opt_compression','row_compression'],
+  ];
+  for (const [cb, row] of pairs) {
+    const el = $('#'+cb); const r = $('#'+row);
+    if (el && r) el.addEventListener('change', () => r.classList.toggle('on', el.checked));
+  }
+}
+
+async function loadOptimization() {
+  try {
+    const [o, stats] = await Promise.all([
+      fetch('/api/optimization').then(r=>r.json()),
+      fetch('/api/optimization/stats').then(r=>r.json()).catch(()=>({})),
+    ]);
+    applyOptimization(o.optimization || {});
+    renderOptStats(stats);
+  } catch (e) { toast('Failed to load optimization settings', false); }
+}
+
+function applyOptimization(o) {
+  const c = o.compression || {}, tr = o.toolResults || {}, h = o.historyTrim || {}, tc = o.toolCompress || {}, ci = o.cacheInject || {}, rc = o.responseCache || {};
+  $('#opt_cache').checked       = ci.enabled !== false;
+  $('#opt_responseCache').checked = rc.enabled !== false;
+  $('#opt_rc_ttl').value        = rc.ttlMinutes ?? 60;
+  $('#opt_toolResults').checked = tr.enabled !== false;
+  $('#opt_tr_ansi').checked      = tr.stripAnsi !== false;
+  $('#opt_tr_blank').checked     = tr.stripBlankLines === true;
+  $('#opt_tr_maxChars').value    = tr.maxChars ?? 30000;
+  $('#opt_history').checked      = h.enabled === true;
+  $('#opt_hist_max').value       = h.maxMessages ?? 60;
+  $('#opt_hist_keep').value      = h.keepFirstN ?? 2;
+  $('#opt_toolCompress').checked = tc.enabled === true;
+  $('#opt_tc_maxlen').value      = tc.maxDescLength ?? 400;
+  $('#opt_tc_examples').checked  = tc.stripExamples !== false;
+  $('#opt_compression').checked  = c.enabled === true;
+  $('#opt_comp_mode').value      = c.mode || 'lite';
+  // sync sub-panel visibility
+  $('#row_cache').classList.toggle('on', $('#opt_cache').checked);
+  $('#row_responseCache').classList.toggle('on', $('#opt_responseCache').checked);
+  $('#row_toolResults').classList.toggle('on', $('#opt_toolResults').checked);
+  $('#row_history').classList.toggle('on', $('#opt_history').checked);
+  $('#row_toolCompress').classList.toggle('on', $('#opt_toolCompress').checked);
+  $('#row_compression').classList.toggle('on', $('#opt_compression').checked);
+}
+
+function gatherOptimization() {
+  return {
+    cacheInject:   { enabled: $('#opt_cache').checked },
+    responseCache: { enabled: $('#opt_responseCache').checked, ttlMinutes: Number($('#opt_rc_ttl').value || 0) },
+    toolResults:  {
+      enabled: $('#opt_toolResults').checked,
+      stripAnsi: $('#opt_tr_ansi').checked,
+      stripBlankLines: $('#opt_tr_blank').checked,
+      maxChars: Number($('#opt_tr_maxChars').value || 0),
+    },
+    historyTrim:  {
+      enabled: $('#opt_history').checked,
+      maxMessages: Number($('#opt_hist_max').value || 60),
+      keepFirstN: Number($('#opt_hist_keep').value || 2),
+    },
+    toolCompress: {
+      enabled: $('#opt_toolCompress').checked,
+      maxDescLength: Number($('#opt_tc_maxlen').value || 400),
+      stripExamples: $('#opt_tc_examples').checked,
+    },
+    compression:  { enabled: $('#opt_compression').checked, mode: $('#opt_comp_mode').value },
+  };
+}
+
+async function saveOptimization() {
+  const result = $('#optResult');
+  result.innerHTML = '<span class="small">saving…</span>';
+  try {
+    const r = await fetch('/api/optimization', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ optimization: gatherOptimization() })
+    });
+    const j = await r.json();
+    if (r.ok) { result.innerHTML = `<span class="ok">${SVG.check} saved</span>`; applyOptimization(j.optimization || {}); toast('Optimization settings saved'); }
+    else result.innerHTML = `<span class="err">${SVG.x} ${escapeHtml(j.error||'failed')}</span>`;
+  } catch (e) { result.innerHTML = `<span class="err">${SVG.x} ${escapeHtml(e.message)}</span>`; }
+}
+
+function renderOptStats(stats) {
+  const cache = stats.cache || {};
+  const rows = [
+    ['Requests routed',          fmtNum(stats.requests || 0)],
+    ['Est. tokens saved',        fmtNum(stats.estTokensSaved || 0)],
+    ['Est. cost saved',          fmtUsd(stats.estCostSavedUsd || 0)],
+    ['Total characters saved',   fmtNum(stats.totalCharsSaved || 0)],
+    ['Cache breakpoints injected', fmtNum(stats.cacheBreakpointsInjected || 0)],
+    ['Response-cache hits',      `${fmtNum(stats.responseCacheHits || 0)} (${Math.round((cache.hitRate||0)*100)}%)`],
+    ['Cache cost avoided',       fmtUsd((stats.responseCacheCostSavedNano || 0) / 1e9)],
+    ['Store backend',            escapeHtml(stats.storeBackend || '—')],
+  ];
+  $('#optStatsLive').innerHTML = rows.map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+  const pill = $('#optSavedPill');
+  if (pill) pill.innerHTML = `<span class="dot" style="background:var(--ok)"></span>${fmtNum(stats.estTokensSaved||0)} tokens saved`;
 }
 
 // ── Launch info ──
@@ -855,96 +1310,56 @@ async function loadLaunchInfo() {
 function renderLaunchCard() {
   const info = state.launchInfo;
   if (!info) return;
-
   const isConfigured = !!(state.config.provider && (state.config.providers[state.config.provider] || {}).model);
   const badgeEl = $('#launchBadge');
-
   if (!isConfigured) {
     $('#launchNoConfig').classList.remove('hide');
     $('#launchNoClaude').classList.add('hide');
     $('#launchReady').classList.add('hide');
-    badgeEl.textContent = 'configure first';
-    badgeEl.className = 'badge warn';
-    return;
+    badgeEl.textContent = 'configure first'; badgeEl.className = 'badge warn'; return;
   }
   $('#launchNoConfig').classList.add('hide');
-
   if (!info.claudeInstalled) {
     $('#launchNoClaude').classList.remove('hide');
     $('#launchReady').classList.add('hide');
-    badgeEl.textContent = 'claude not installed';
-    badgeEl.className = 'badge err';
-    return;
+    badgeEl.textContent = 'claude not installed'; badgeEl.className = 'badge err'; return;
   }
   $('#launchNoClaude').classList.add('hide');
   $('#launchReady').classList.remove('hide');
-
   const platform = info.platform;
   const platformLabel = { darwin:'macOS', linux:'Linux', win32:'Windows' }[platform] || platform;
   $('#launchPlatformLabel').textContent = platformLabel;
   $('#launchClaudePath').textContent = info.claudePath || 'claude';
-
-  const primaryCmd = platform === 'win32' ? info.commands.ps : info.commands.unix;
-  $('#launchCmdPrimary').textContent = primaryCmd;
-
-  badgeEl.textContent = 'ready';
-  badgeEl.className = 'badge ok';
+  $('#launchCmdPrimary').textContent = platform === 'win32' ? info.commands.ps : info.commands.unix;
+  badgeEl.textContent = 'ready'; badgeEl.className = 'badge ok';
 }
 
 function renderLaunchPage() {
   const info = state.launchInfo;
   const base = location.origin;
-
-  const claudeCmd = (info && info.claudePath) ? info.claudePath : 'claude';
   const platform  = (info && info.platform) || (navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin');
   const platformLabel = { darwin:'macOS', linux:'Linux', win32:'Windows' }[platform] || platform;
-
-  // Status card
   const statusBody = $('#launchCliStatusBody');
   if (statusBody && info) {
     statusBody.innerHTML = `
       <div class="k">Platform</div><div class="v">${escapeHtml(platformLabel)} (${escapeHtml(info.platform)})</div>
       <div class="k">Claude CLI</div><div class="v ${info.claudeInstalled?'ok':'bad'}">${info.claudeInstalled ? escapeHtml(info.claudePath) : 'not found — install via System page'}</div>
-      <div class="k">Proxy base URL</div><div class="v">${escapeHtml(info.base)}</div>
-    `;
+      <div class="k">Proxy base URL</div><div class="v">${escapeHtml(info.base)}</div>`;
   }
-
-  // Platform pill
-  const pill = $('#launchPlatformPill');
-  if (pill) pill.textContent = 'platform: ' + platformLabel;
-
-  // Base URL
-  const baseEl = $('#launchBase');
-  if (baseEl) baseEl.textContent = (info && info.base) || base;
-
-  // Commands
+  const pill = $('#launchPlatformPill'); if (pill) pill.textContent = 'platform: ' + platformLabel;
+  const baseEl = $('#launchBase'); if (baseEl) baseEl.textContent = (info && info.base) || base;
   if (info) {
-    const u = $('#cmdUnix'); if (u) u.textContent = info.commands.unix;
-    const w = $('#cmdWin');  if (w) w.textContent = info.commands.ps;
-    const c = $('#cmdWinCmd'); if (c) c.textContent = info.commands.wincmd;
+    $('#cmdUnix').textContent = info.commands.unix;
+    $('#cmdWin').textContent = info.commands.ps;
+    $('#cmdWinCmd').textContent = info.commands.wincmd;
   } else {
-    const unix = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\nexport ANTHROPIC_API_KEY="proxy-max"\nclaude --dangerously-skip-permissions`;
-    const ps   = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\n$env:ANTHROPIC_API_KEY = "proxy-max"\nclaude --dangerously-skip-permissions`;
-    const cmd  = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && set ANTHROPIC_API_KEY=proxy-max && claude --dangerously-skip-permissions`;
-    const u = $('#cmdUnix'); if (u) u.textContent = unix;
-    const w = $('#cmdWin');  if (w) w.textContent = ps;
-    const c = $('#cmdWinCmd'); if (c) c.textContent = cmd;
+    $('#cmdUnix').textContent = `export ANTHROPIC_BASE_URL="${base}"\nexport ANTHROPIC_AUTH_TOKEN="proxy-max"\nexport ANTHROPIC_API_KEY="proxy-max"\nclaude --dangerously-skip-permissions`;
+    $('#cmdWin').textContent = `$env:ANTHROPIC_BASE_URL = "${base}"\n$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"\n$env:ANTHROPIC_API_KEY = "proxy-max"\nclaude --dangerously-skip-permissions`;
+    $('#cmdWinCmd').textContent = `set ANTHROPIC_BASE_URL=${base} && set ANTHROPIC_AUTH_TOKEN=proxy-max && set ANTHROPIC_API_KEY=proxy-max && claude --dangerously-skip-permissions`;
   }
-
-  const boot = $('#cmdBoot');
-  if (boot) boot.textContent =
-`# macOS / Linux
-bash ./bootstrap.sh --claude
-
-# Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -File .\\bootstrap.ps1 --claude`;
-
-  // Highlight the recommended tab based on platform
-  if (platform === 'win32') {
-    switchShellTab('ps');
-  } else {
-    switchShellTab('unix');
-  }
+  $('#cmdBoot').textContent = `# macOS / Linux\nbash ./bootstrap.sh --claude\n\n# Windows (PowerShell)\npowershell -ExecutionPolicy Bypass -File .\\bootstrap.ps1 --claude`;
+  for (const b of document.querySelectorAll('.copy-btn')) if (!b.innerHTML.trim() || !b.querySelector('svg')) b.innerHTML = copyLabel;
+  switchShellTab(platform === 'win32' ? 'ps' : 'unix');
 }
 
 // ── Health ──
@@ -968,47 +1383,28 @@ function applyLimits(l) {
   $('#lim_tpm').value = lim.tpm ?? '';
   $('#lim_rpm').value = lim.rpm ?? '';
   $('#lim_enabled').checked = lim.enabled !== false;
-  if (l.usage) {
-    $('#limitsUsage').textContent =
-      `Window: ${l.usage.rpm} requests, ${l.usage.tpm.toLocaleString()} tokens in the last ${l.usage.windowSeconds}s.`;
-  }
+  if (l.usage) $('#limitsUsage').textContent = `Window: ${l.usage.rpm} requests, ${l.usage.tpm.toLocaleString()} tokens in the last ${l.usage.windowSeconds}s.`;
 }
-
 async function saveLimits() {
-  const payload = {
-    tpm: Number($('#lim_tpm').value || 0),
-    rpm: Number($('#lim_rpm').value || 0),
-    enabled: $('#lim_enabled').checked
-  };
+  const payload = { tpm: Number($('#lim_tpm').value || 0), rpm: Number($('#lim_rpm').value || 0), enabled: $('#lim_enabled').checked };
   $('#limitsResult').innerHTML = '<span class="small">saving…</span>';
   try {
-    const r = await fetch('/api/limits', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
+    const r = await fetch('/api/limits', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const j = await r.json();
-    if (r.ok) { $('#limitsResult').innerHTML = '<span class="ok">✓ saved</span>'; applyLimits(j); }
-    else $('#limitsResult').innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>';
-  } catch (e) { $('#limitsResult').innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+    if (r.ok) { $('#limitsResult').innerHTML = `<span class="ok">${SVG.check} saved</span>`; applyLimits(j); }
+    else $('#limitsResult').innerHTML = `<span class="err">${SVG.x} ${escapeHtml(j.error||'failed')}</span>`;
+  } catch (e) { $('#limitsResult').innerHTML = `<span class="err">${SVG.x} ${escapeHtml(e.message)}</span>`; }
 }
 
 // ── Provider / model form ──
 function fillModelSelect(p) {
-  const sel = $('#modelSelect');
-  sel.innerHTML = '';
-  const groups = state.models[p] || [];
-  for (const g of groups) {
-    const og = document.createElement('optgroup');
-    og.label = g.group;
-    for (const m of g.models) {
-      const o = document.createElement('option');
-      o.value = m.id; o.textContent = m.label + ' — ' + m.id;
-      og.appendChild(o);
-    }
+  const sel = $('#modelSelect'); sel.innerHTML = '';
+  for (const g of (state.models[p] || [])) {
+    const og = document.createElement('optgroup'); og.label = g.group;
+    for (const m of g.models) { const o = document.createElement('option'); o.value = m.id; o.textContent = m.label + ' — ' + m.id; og.appendChild(o); }
     sel.appendChild(og);
   }
 }
-
 function selectProvider(p) {
   state.provider = p;
   for (const el of document.querySelectorAll('.src')) el.classList.toggle('active', el.dataset.p === p);
@@ -1018,93 +1414,54 @@ function selectProvider(p) {
   $('#azureFields').classList.toggle('hide', p!=='azure');
   $('#nvidiaFields').classList.toggle('hide', p!=='nvidia');
   $('#bedrockFields').classList.toggle('hide', p!=='bedrock');
-
   fillModelSelect(p);
-
   const saved = (state.config.providers || {})[p] || {};
   if (saved.model) {
     const exists = [...$('#modelSelect').options].some(o => o.value === saved.model);
     if (exists) $('#modelSelect').value = saved.model; else $('#modelCustom').value = saved.model;
   } else { $('#modelCustom').value = ''; }
-
   if (p === 'azure') {
-    $('#az_endpoint').value  = saved.endpoint   || '';
-    $('#az_apiKey').value    = saved.apiKey      || '';
-    $('#az_deployment').value= saved.deployment  || '';
-    $('#az_apiVersion').value= saved.apiVersion  || '';
+    $('#az_endpoint').value = saved.endpoint || ''; $('#az_apiKey').value = saved.apiKey || '';
+    $('#az_deployment').value = saved.deployment || ''; $('#az_apiVersion').value = saved.apiVersion || '';
   } else if (p === 'nvidia') {
-    $('#nv_endpoint').value  = saved.endpoint || '';
-    $('#nv_apiKey').value    = saved.apiKey   || '';
+    $('#nv_endpoint').value = saved.endpoint || ''; $('#nv_apiKey').value = saved.apiKey || '';
   } else if (p === 'bedrock') {
-    $('#br_region').value    = saved.region           || 'us-east-1';
-    $('#br_endpoint').value  = saved.endpoint         || '';
-    $('#br_access').value    = saved.accessKeyId      || '';
-    $('#br_secret').value    = saved.secretAccessKey  || '';
-    $('#br_token').value     = saved.sessionToken     || '';
+    $('#br_region').value = saved.region || 'us-east-1'; $('#br_endpoint').value = saved.endpoint || '';
+    $('#br_access').value = saved.accessKeyId || ''; $('#br_secret').value = saved.secretAccessKey || ''; $('#br_token').value = saved.sessionToken || '';
   }
   renderLaunchCard();
 }
-
-function extractNvidiaModelFromUrl(url) {
-  const m = (url || '').match(/^https?:\/\/build\.nvidia\.com\/([^?#]+?)\/?$/);
-  return m ? m[1] : null;
-}
-
+function extractNvidiaModelFromUrl(url) { const m = (url || '').match(/^https?:\/\/build\.nvidia\.com\/([^?#]+?)\/?$/); return m ? m[1] : null; }
 function gatherConfig() {
   const p = state.provider;
   const model = ($('#modelCustom').value.trim()) || $('#modelSelect').value;
-  if (p === 'azure') return { model,
-    endpoint:   $('#az_endpoint').value.trim(),
-    apiKey:     $('#az_apiKey').value,
-    deployment: $('#az_deployment').value.trim(),
-    apiVersion: $('#az_apiVersion').value.trim() };
+  if (p === 'azure') return { model, endpoint: $('#az_endpoint').value.trim(), apiKey: $('#az_apiKey').value, deployment: $('#az_deployment').value.trim(), apiVersion: $('#az_apiVersion').value.trim() };
   if (p === 'nvidia') {
     const rawEndpoint = $('#nv_endpoint').value.trim();
-    const buildModel  = extractNvidiaModelFromUrl(rawEndpoint);
-    return {
-      model: model || buildModel || '',
-      endpoint: buildModel ? 'https://integrate.api.nvidia.com/v1' : (rawEndpoint || 'https://integrate.api.nvidia.com/v1'),
-      apiKey: $('#nv_apiKey').value
-    };
+    const buildModel = extractNvidiaModelFromUrl(rawEndpoint);
+    return { model: model || buildModel || '', endpoint: buildModel ? 'https://integrate.api.nvidia.com/v1' : (rawEndpoint || 'https://integrate.api.nvidia.com/v1'), apiKey: $('#nv_apiKey').value };
   }
-  if (p === 'bedrock') return { model,
-    region:          $('#br_region').value.trim() || 'us-east-1',
-    endpoint:        $('#br_endpoint').value.trim(),
-    accessKeyId:     $('#br_access').value.trim(),
-    secretAccessKey: $('#br_secret').value,
-    sessionToken:    $('#br_token').value };
+  if (p === 'bedrock') return { model, region: $('#br_region').value.trim() || 'us-east-1', endpoint: $('#br_endpoint').value.trim(), accessKeyId: $('#br_access').value.trim(), secretAccessKey: $('#br_secret').value, sessionToken: $('#br_token').value };
 }
-
 async function save() {
   const cfg = gatherConfig();
   if (!cfg.model) return toast('Pick or enter a model id', false);
-  const r = await fetch('/api/config', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ provider: state.provider, config: cfg })
-  });
+  const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider: state.provider, config: cfg }) });
   if (!r.ok) return toast('Save failed', false);
   toast('Saved & activated');
   state.config = await fetch('/api/config').then(r=>r.json());
   setHealth(await fetch('/api/health').then(r=>r.json()));
   renderLaunchCard();
 }
-
 async function testConn() {
   const cfg = gatherConfig();
   $('#testResult').innerHTML = '<span class="small">testing…</span>';
   try {
-    const r = await fetch('/api/test', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ provider: state.provider, config: cfg })
-    });
+    const r = await fetch('/api/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider: state.provider, config: cfg }) });
     const j = await r.json();
-    if (j.ok) $('#testResult').innerHTML = '<span class="ok">✓ reachable</span> <span class="small">— ' + escapeHtml((j.sample||'').slice(0,180)) + '</span>';
-    else      $('#testResult').innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>';
-  } catch (e) { $('#testResult').innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    if (j.ok) $('#testResult').innerHTML = `<span class="ok">${SVG.check} reachable</span> <span class="small">— ${escapeHtml((j.sample||'').slice(0,180))}</span>`;
+    else      $('#testResult').innerHTML = `<span class="err">${SVG.x} ${escapeHtml(j.error||'failed')}</span>`;
+  } catch (e) { $('#testResult').innerHTML = `<span class="err">${SVG.x} ${escapeHtml(e.message)}</span>`; }
 }
 
 // ── Model browser ──
@@ -1115,25 +1472,13 @@ function renderModelsBrowser() {
   const html = [];
   for (const p of ['bedrock','azure','nvidia']) {
     const groups = state.models[p] || [];
-    const matched = groups.map(g => ({
-      group: g.group,
-      models: g.models.filter(m => !q || m.id.toLowerCase().includes(q) || m.label.toLowerCase().includes(q))
-    })).filter(g => g.models.length);
+    const matched = groups.map(g => ({ group: g.group, models: g.models.filter(m => !q || m.id.toLowerCase().includes(q) || m.label.toLowerCase().includes(q)) })).filter(g => g.models.length);
     if (!matched.length) continue;
     html.push(`<h4 style="margin:14px 0 6px;color:var(--text);font-size:13.5px">${labels[p]}</h4>`);
     for (const g of matched) {
-      html.push(`<div class="small" style="margin:8px 0 4px;color:var(--dim);letter-spacing:.04em">${escapeHtml(g.group)}</div>`);
+      html.push(`<div class="small" style="margin:8px 0 4px;color:var(--dim)">${escapeHtml(g.group)}</div>`);
       for (const m of g.models) {
-        html.push(`<div class="check">
-          <div class="left">
-            <div class="ic">${p[0].toUpperCase()}</div>
-            <div class="meta">
-              <div class="title">${escapeHtml(m.label)}</div>
-              <div class="path">${escapeHtml(m.id)}</div>
-            </div>
-          </div>
-          <button class="btn secondary sm" data-use="${p}|${escapeHtml(m.id)}">Use</button>
-        </div>`);
+        html.push(`<div class="check"><div class="left"><div class="ic">${p[0].toUpperCase()}</div><div class="meta"><div class="title">${escapeHtml(m.label)}</div><div class="path">${escapeHtml(m.id)}</div></div></div><button class="btn secondary sm" data-use="${p}|${escapeHtml(m.id)}">Use</button></div>`);
       }
     }
   }
@@ -1141,134 +1486,62 @@ function renderModelsBrowser() {
   for (const b of root.querySelectorAll('button[data-use]')) {
     b.addEventListener('click', () => {
       const [p, id] = b.dataset.use.split('|');
-      navTo('provider');
-      selectProvider(p);
+      navTo('provider'); selectProvider(p);
       const sel = $('#modelSelect');
-      const has = [...sel.options].some(o => o.value === id);
-      if (has) { sel.value = id; $('#modelCustom').value = ''; }
-      else { $('#modelCustom').value = id; }
+      if ([...sel.options].some(o => o.value === id)) { sel.value = id; $('#modelCustom').value = ''; } else { $('#modelCustom').value = id; }
       toast('Loaded into form — set credentials & save');
     });
   }
 }
-document.addEventListener('input', e => {
-  if (e.target.id === 'modelSearch') renderModelsBrowser();
-});
+document.addEventListener('input', e => { if (e.target.id === 'modelSearch') renderModelsBrowser(); });
 
 // ── System ──
 async function refreshSystem() {
   const sys = await fetch('/api/system').then(r=>r.json());
   state.system = sys;
   $('#osBadge').textContent = `${sys.platform}/${sys.arch}`;
-  const kv = $('#sysKv');
-  kv.innerHTML = '';
+  const kv = $('#sysKv'); kv.innerHTML = '';
   const rows = [
-    ['User',             sys.user],
-    ['Home',             sys.home],
-    ['Admin / root',     sys.admin ? '<span class="ok">yes</span>' : '<span class="warn">no — installs use per-user prefix</span>'],
-    ['Home writable',    sys.writableHome ? '<span class="ok">yes</span>' : '<span class="err">no</span>'],
-    ['npm prefix',       sys.npmPrefix],
-    ['Portable Node dir',sys.portableNodeDir],
-    ['Cache dir',        sys.proxyHome]
+    ['User', sys.user], ['Home', sys.home],
+    ['Admin / root', sys.admin ? '<span class="ok">yes</span>' : '<span class="warn">no — installs use per-user prefix</span>'],
+    ['Home writable', sys.writableHome ? '<span class="ok">yes</span>' : '<span class="err">no</span>'],
+    ['npm prefix', sys.npmPrefix], ['Portable Node dir', sys.portableNodeDir], ['Cache dir', sys.proxyHome]
   ];
   for (const [k,v] of rows) kv.insertAdjacentHTML('beforeend', `<div class="k">${k}</div><div class="v">${v}</div>`);
-
-  const checks = $('#checks');
-  checks.innerHTML = '';
-  for (const [name, key, ic, hint] of [
-    ['Node.js',       'node',   'N', 'Required to run this proxy.'],
-    ['npm',           'npm',    'n', 'Used to install the Anthropic CLI.'],
-    ['Anthropic CLI', 'claude', 'C', 'The claude binary this proxy translates for.'],
-    ['Python',        'python', 'P', 'Required for Claude Code stop hooks.']
+  const checks = $('#checks'); checks.innerHTML = '';
+  for (const [name, key, ico, hint] of [
+    ['Node.js','node','N','Required to run this proxy.'],
+    ['npm','npm','n','Used to install the Anthropic CLI.'],
+    ['Anthropic CLI','claude','C','The claude binary this proxy translates for.'],
+    ['Python','python','P','Required for Claude Code stop hooks.']
   ]) {
     const c = sys.components[key]; const ok = !!c.ok;
-    checks.insertAdjacentHTML('beforeend', `<div class="check ${ok?'ok':'bad'}">
-      <div class="left">
-        <div class="ic">${ic}</div>
-        <div class="meta">
-          <div class="title">${name} ${ok?`<span class="ok">— ${escapeHtml(c.version||'')}</span>`:'<span class="err">— not found</span>'}</div>
-          <div class="path">${escapeHtml(c.path||hint)}</div>
-        </div>
-      </div>
-      <span class="pill ${ok?'ok':'err'}"><span class="dot"></span>${ok?'detected':'missing'}</span>
-    </div>`);
+    checks.insertAdjacentHTML('beforeend', `<div class="check ${ok?'ok':'bad'}"><div class="left"><div class="ic">${ico}</div><div class="meta"><div class="title">${name} ${ok?`<span class="ok">— ${escapeHtml(c.version||'')}</span>`:'<span class="err">— not found</span>'}</div><div class="path">${escapeHtml(c.path||hint)}</div></div></div><span class="pill ${ok?'ok':'err'}"><span class="dot"></span>${ok?'detected':'missing'}</span></div>`);
   }
-
   $('#pathCount').textContent = sys.pathDirs.length;
   $('#pathList').textContent  = sys.pathDirs.join('\n');
-
   const allOk = sys.components.node.ok && sys.components.npm.ok && sys.components.claude.ok;
-  $('#installAll').disabled    = allOk;
+  $('#installAll').disabled = allOk;
   $('#installAll').textContent = allOk ? 'All installed' : 'Install missing';
-  $('#installHint').innerHTML  = sys.admin
-    ? '<span class="ok">admin detected</span> — global installs available'
-    : '<span class="warn">no admin</span> — installs go to <code>' + escapeHtml(sys.npmPrefix) + '</code>';
-}
-
-// ── Panel test ──
-async function refreshPanelTest() {
-  try {
-    const [s, e] = await Promise.all([
-      fetch('/api/panel/summary').then(r => r.json()),
-      fetch('/api/panel/events?limit=20').then(r => r.json())
-    ]);
-    const summary = (s && s.summary) || {};
-    $('#panelSummary').innerHTML = `
-      <div class="k">Total events</div><div class="v">${summary.total || 0}</div>
-      <div class="k">Impressions</div><div class="v">${summary.impressions || 0}</div>
-      <div class="k">Clicks</div><div class="v">${summary.clicks || 0}</div>
-      <div class="k">CTR</div><div class="v">${summary.ctr || 0}</div>
-      <div class="k">Watch ms total</div><div class="v">${summary.watchMsTotal || 0}</div>
-    `;
-    $('#panelEvents').textContent = JSON.stringify((e && e.events) || [], null, 2) || '(empty)';
-  } catch (err) {
-    $('#panelSummary').innerHTML = '<div class="k">Error</div><div class="v err">' + escapeHtml(err.message) + '</div>';
-    $('#panelEvents').textContent = '(error)';
-  }
-}
-
-function makeTestEvent(type) {
-  return { type, adId:'test-ad-1', impressionId:`imp-${Date.now()}`, sessionId:'local-session', watchMs: type==='impression'?4500:0, source:'ui-test' };
-}
-async function postPanelEvent(type) {
-  const r = await fetch('/api/panel/event', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(makeTestEvent(type))
-  });
-  const j = await r.json();
-  if (!j.ok) throw new Error(j.error || 'failed');
-  await refreshPanelTest();
-}
-async function resetPanelEvents() {
-  await fetch('/api/panel/reset', { method:'POST' });
-  await refreshPanelTest();
+  $('#installHint').innerHTML = sys.admin ? '<span class="ok">admin detected</span> — global installs available' : '<span class="warn">no admin</span> — installs go to <code>' + escapeHtml(sys.npmPrefix) + '</code>';
 }
 
 async function runInstall(what) {
   const con = $('#installConsole'); con.textContent = '';
   const sys = state.system || await fetch('/api/system').then(r=>r.json());
   const r = await fetch(`/api/install?what=${encodeURIComponent(what)}&admin=${sys.admin?1:0}`, { method:'POST' });
-  const reader = r.body.getReader(); const dec = new TextDecoder();
-  let buf = '';
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
   for (;;) {
     const { value, done } = await reader.read(); if (done) break;
-    buf += dec.decode(value, { stream:true });
-    let idx;
+    buf += dec.decode(value, { stream:true }); let idx;
     while ((idx = buf.indexOf('\n\n')) >= 0) {
       const chunk = buf.slice(0, idx); buf = buf.slice(idx+2);
       const lines = chunk.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
       for (const l of lines) {
         try {
           const evt = JSON.parse(l);
-          if (evt.type === 'log') {
-            const cls = evt.level === 'warn' ? 'warn' : '';
-            con.insertAdjacentHTML('beforeend', `<span class="${cls}">${escapeHtml(evt.msg)}</span>`);
-            con.scrollTop = con.scrollHeight;
-          } else if (evt.type === 'done') {
-            con.insertAdjacentHTML('beforeend', `\n[exit ${evt.code}]\n`);
-            if (evt.system) { state.system = evt.system; await refreshSystem(); }
-            // Refresh launch info after install in case claude was installed
-            await loadLaunchInfo();
-          }
+          if (evt.type === 'log') { con.insertAdjacentHTML('beforeend', `<span class="${evt.level==='warn'?'warn':''}">${escapeHtml(evt.msg)}</span>`); con.scrollTop = con.scrollHeight; }
+          else if (evt.type === 'done') { con.insertAdjacentHTML('beforeend', `\n[exit ${evt.code}]\n`); if (evt.system) { state.system = evt.system; await refreshSystem(); } await loadLaunchInfo(); }
         } catch {}
       }
     }
@@ -1277,69 +1550,33 @@ async function runInstall(what) {
 
 // ── Model Pool ──
 let _poolData = { pool: [], rrIndex: 0 };
-
-async function loadPool() {
-  try {
-    _poolData = await fetch('/api/pool').then(r => r.json());
-    renderPool(_poolData);
-  } catch {}
-}
-
+async function loadPool() { try { _poolData = await fetch('/api/pool').then(r => r.json()); renderPool(_poolData); } catch {} }
 function renderPool(data) {
   const pool = data.pool || [];
-  const list = $('#poolList');
   const sizeEl = $('#poolSizePill'); if (sizeEl) sizeEl.innerHTML = `<span class="dot" style="background:${pool.length>0?'var(--ok)':'var(--mute)'}"></span>${pool.length} model${pool.length!==1?'s':''}`;
   const rrEl = $('#poolRRPill'); if (rrEl) rrEl.textContent = `rr: ${data.rrIndex ?? 0}`;
-  if (!list) return;
-  if (pool.length === 0) {
-    list.innerHTML = '<div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div>';
-    return;
-  }
+  const list = $('#poolList'); if (!list) return;
+  if (pool.length === 0) { list.innerHTML = '<div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div>'; return; }
   const provAbbr = { nvidia:'N', azure:'A', bedrock:'B' };
   list.innerHTML = pool.map((e, i) => {
     const s = e.stats || { req:0, err:0, lastMs:0, cooldownSecsLeft:0 };
     const cooled = (s.cooldownSecsLeft || 0) > 0;
     const errPct = s.req > 0 ? Math.round(s.err / s.req * 100) : 0;
     const statStr = `${s.req} req · ${s.err} err${s.req>0?' · '+s.lastMs+'ms':''}`;
-    const coolBadge = cooled
-      ? `<span class="cooldown-badge">⏸ ${s.cooldownSecsLeft >= 3600 ? Math.ceil(s.cooldownSecsLeft/60)+'m' : s.cooldownSecsLeft+'s'}</span>`
-      : '';
-    return `<div class="pool-row${cooled?' cooled':''}">
-      <div class="pool-prov ${e.provider}">${provAbbr[e.provider]||'?'}</div>
-      <div class="pool-info">
-        <div class="pool-label">${escapeHtml(e.label || e.model)}</div>
-        <div class="pool-model">${escapeHtml(e.model)}</div>
-      </div>
-      ${coolBadge}
-      <span class="pool-stat ${s.err>0&&errPct>50?'warn':''}">${escapeHtml(statStr)}</span>
-      <button class="btn-remove" data-pool-idx="${i}" title="Remove">×</button>
-    </div>`;
+    const coolBadge = cooled ? `<span class="cooldown-badge">${SVG.pause} ${s.cooldownSecsLeft >= 3600 ? Math.ceil(s.cooldownSecsLeft/60)+'m' : s.cooldownSecsLeft+'s'}</span>` : '';
+    return `<div class="pool-row${cooled?' cooled':''}"><div class="pool-prov ${e.provider}">${provAbbr[e.provider]||'?'}</div><div class="pool-info"><div class="pool-label">${escapeHtml(e.label || e.model)}</div><div class="pool-model">${escapeHtml(e.model)}</div></div>${coolBadge}<span class="pool-stat ${s.err>0&&errPct>50?'warn':''}">${escapeHtml(statStr)}</span><button class="btn-remove" data-pool-idx="${i}" title="Remove">${SVG.trash}</button></div>`;
   }).join('');
-  for (const btn of list.querySelectorAll('.btn-remove')) {
-    btn.addEventListener('click', () => removeFromPool(Number(btn.dataset.poolIdx)));
-  }
+  for (const btn of list.querySelectorAll('.btn-remove')) btn.addEventListener('click', () => removeFromPool(Number(btn.dataset.poolIdx)));
 }
-
 function poolProviderChanged() {
   const p = $('#poolProvider').value;
-
-  // Populate model datalist
-  const dl = $('#poolModelList');
-  dl.innerHTML = '';
-  const groups = (state.models || {})[p] || [];
-  for (const g of groups) for (const m of g.models) {
-    const o = document.createElement('option'); o.value = m.id; dl.appendChild(o);
-  }
-
-  // Show credential status for this provider
+  const dl = $('#poolModelList'); dl.innerHTML = '';
+  for (const g of ((state.models || {})[p] || [])) for (const m of g.models) { const o = document.createElement('option'); o.value = m.id; dl.appendChild(o); }
   const saved = (state.config.providers || {})[p] || {};
   const hasKey = !!(saved.apiKey || saved.accessKeyId);
-  const statusEl = $('#poolCredStatus');
-  if (!statusEl) return;
-
+  const statusEl = $('#poolCredStatus'); if (!statusEl) return;
   const provNames = { nvidia: 'NVIDIA NIM', azure: 'Azure AI Foundry', bedrock: 'AWS Bedrock' };
   const rows = [];
-
   if (p === 'nvidia') {
     rows.push(['API Key', saved.apiKey ? '••••' + saved.apiKey.slice(-4) : '<span class="err">not set</span>']);
     rows.push(['Endpoint', saved.endpoint || '<span class="mute">default (integrate.api.nvidia.com)</span>']);
@@ -1353,156 +1590,93 @@ function poolProviderChanged() {
     rows.push(['Access Key', saved.accessKeyId ? '••••' + saved.accessKeyId.slice(-4) : '<span class="err">not set</span>']);
     rows.push(['Secret Key', saved.secretAccessKey ? '••••••••' : '<span class="err">not set</span>']);
   }
-
-  const icon = hasKey ? '<span class="ok">✓</span>' : '<span class="err">✗</span>';
+  const icon = hasKey ? `<span class="ok">${SVG.check}</span>` : `<span class="err">${SVG.x}</span>`;
   const status = hasKey
     ? `${icon} <strong>${provNames[p]}</strong> credentials saved — models added here will use them`
-    : `${icon} <strong>${provNames[p]}</strong> has no saved credentials — <span class="link-btn" onclick="navTo('provider')" style="color:var(--accent);cursor:pointer">configure on Provider page</span> first`;
-
-  statusEl.innerHTML = `<div style="margin-bottom:${rows.length?'8px':'0'}">${status}</div>`
-    + rows.map(([k,v]) => `<div style="display:flex;gap:8px"><span style="color:var(--dim);min-width:90px">${k}</span><span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px">${v}</span></div>`).join('');
-
-  const addBtn = $('#poolAddBtn');
-  if (addBtn) addBtn.disabled = !hasKey;
+    : `${icon} <strong>${provNames[p]}</strong> has no saved credentials — <span class="link-btn" onclick="navTo('provider')">configure on Provider page</span> first`;
+  statusEl.innerHTML = `<div style="margin-bottom:${rows.length?'8px':'0'};display:flex;align-items:center;gap:6px">${status}</div>` + rows.map(([k,v]) => `<div style="display:flex;gap:8px"><span style="color:var(--dim);min-width:90px">${k}</span><span class="mono" style="font-size:12px">${v}</span></div>`).join('');
+  const addBtn = $('#poolAddBtn'); if (addBtn) addBtn.disabled = !hasKey;
 }
-
 async function addToPool() {
   const provider = $('#poolProvider').value;
   const model = ($('#poolModel').value || '').trim();
   const label = ($('#poolLabel').value || '').trim() || null;
   const overrideEndpoint = ($('#poolEntryEndpoint')?.value || '').trim() || null;
-  const overrideApiKey   = ($('#poolEntryApiKey')?.value || '').trim() || null;
+  const overrideApiKey = ($('#poolEntryApiKey')?.value || '').trim() || null;
   const result = $('#poolAddResult');
   if (!model) { if (result) result.innerHTML = '<span class="err">Enter a model ID</span>'; return; }
-  const current = (_poolData.pool || []).map(e => {
-    const o = { provider: e.provider, model: e.model, label: e.label || null };
-    for (const f of ['endpoint','apiKey','apiVersion','deployment','region']) if (e[f]) o[f] = e[f];
-    return o;
-  });
-  if (current.some(e => e.provider === provider && e.model === model)) {
-    if (result) result.innerHTML = '<span class="warn">Already in pool</span>'; return;
-  }
+  const current = (_poolData.pool || []).map(e => { const o = { provider: e.provider, model: e.model, label: e.label || null }; for (const f of ['endpoint','apiKey','apiVersion','deployment','region']) if (e[f]) o[f] = e[f]; return o; });
+  if (current.some(e => e.provider === provider && e.model === model)) { if (result) result.innerHTML = '<span class="warn">Already in pool</span>'; return; }
   const newEntry = { provider, model, label };
   if (overrideEndpoint) newEntry.endpoint = overrideEndpoint;
-  if (overrideApiKey)   newEntry.apiKey   = overrideApiKey;
-  const updated = [...current, newEntry];
+  if (overrideApiKey) newEntry.apiKey = overrideApiKey;
   if (result) result.innerHTML = '<span class="small">saving…</span>';
   try {
-    const r = await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: updated }) });
+    const r = await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: [...current, newEntry] }) });
     const j = await r.json();
     if (r.ok) {
-      if (result) result.innerHTML = '<span class="ok">✓ added</span>';
+      if (result) result.innerHTML = `<span class="ok">${SVG.check} added</span>`;
       $('#poolModel').value = ''; $('#poolLabel').value = '';
       if ($('#poolEntryEndpoint')) $('#poolEntryEndpoint').value = '';
-      if ($('#poolEntryApiKey'))   $('#poolEntryApiKey').value = '';
-      await loadPool();
-      const h = await fetch('/api/health').then(r=>r.json());
-      setHealth(h);
-    } else { if (result) result.innerHTML = '<span class="err">✗ ' + escapeHtml(j.error||'failed') + '</span>'; }
-  } catch (e) { if (result) result.innerHTML = '<span class="err">✗ ' + escapeHtml(e.message) + '</span>'; }
+      if ($('#poolEntryApiKey')) $('#poolEntryApiKey').value = '';
+      await loadPool(); setHealth(await fetch('/api/health').then(r=>r.json()));
+    } else { if (result) result.innerHTML = `<span class="err">${SVG.x} ${escapeHtml(j.error||'failed')}</span>`; }
+  } catch (e) { if (result) result.innerHTML = `<span class="err">${SVG.x} ${escapeHtml(e.message)}</span>`; }
 }
-
 async function removeFromPool(idx) {
-  const current = (_poolData.pool || []).map(e => {
-    const o = { provider: e.provider, model: e.model, label: e.label || null };
-    for (const f of ['endpoint','apiKey','apiVersion','deployment','region']) if (e[f]) o[f] = e[f];
-    return o;
-  });
+  const current = (_poolData.pool || []).map(e => { const o = { provider: e.provider, model: e.model, label: e.label || null }; for (const f of ['endpoint','apiKey','apiVersion','deployment','region']) if (e[f]) o[f] = e[f]; return o; });
   current.splice(idx, 1);
-  try {
-    await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: current }) });
-    await loadPool();
-    const h = await fetch('/api/health').then(r=>r.json());
-    setHealth(h);
-  } catch {}
+  try { await fetch('/api/pool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pool: current }) }); await loadPool(); setHealth(await fetch('/api/health').then(r=>r.json())); } catch {}
 }
-
-async function resetCircuits() {
-  try {
-    await fetch('/api/pool/reset-circuits', { method: 'POST' });
-    toast('Circuit breakers reset — all models active');
-    await loadPool();
-  } catch (e) { toast(e.message, false); }
-}
+async function resetCircuits() { try { await fetch('/api/pool/reset-circuits', { method: 'POST' }); toast('Circuit breakers reset — all models active'); await loadPool(); } catch (e) { toast(e.message, false); } }
 
 // ── Request Log ──
 async function loadLogs() {
   try {
-    // Use file-based endpoint — survives restarts, works from VM.
     const data = await fetch('/api/logs/file?lines=200').then(r => r.json());
     const pathEl = $('#logFilePath');
-    if (pathEl && data.logFile) {
-      const files = (data.logFiles || []).map(f => `${f.name} (${(f.bytes/1024).toFixed(0)} KB)`).join('  ·  ');
-      pathEl.textContent = `Log: ${data.logFile}${files ? '   —   ' + files : ''}`;
-    }
+    if (pathEl && data.logFile) { const files = (data.logFiles || []).map(f => `${f.name} (${(f.bytes/1024).toFixed(0)} KB)`).join('  ·  '); pathEl.textContent = `Log: ${data.logFile}${files ? '   —   ' + files : ''}`; }
     renderLogs(data.logs || [], data.total || 0);
   } catch {}
 }
-
 async function clearLogs() {
-  try {
-    await fetch('/api/logs/clear', { method: 'POST' });
-    renderLogs([], 0);
-    const pathEl = $('#logFilePath');
-    if (pathEl) pathEl.textContent = '';
-    const cnt = $('#logCount');
-    if (cnt) cnt.textContent = '0 entries';
-    toast('Log cleared');
-  } catch (e) { toast(e.message, false); }
+  try { await fetch('/api/logs/clear', { method: 'POST' }); renderLogs([], 0); const pathEl = $('#logFilePath'); if (pathEl) pathEl.textContent = ''; const cnt = $('#logCount'); if (cnt) cnt.textContent = '0 entries'; toast('Log cleared'); } catch (e) { toast(e.message, false); }
 }
-
 function renderLogs(logs, total) {
-  const cnt = $('#logCount');
-  if (cnt) cnt.textContent = `${total} entr${total === 1 ? 'y' : 'ies'} on disk`;
-  const el = $('#logTable');
-  if (!el) return;
-  if (logs.length === 0) {
-    el.innerHTML = '<div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div>';
-    return;
-  }
+  const cnt = $('#logCount'); if (cnt) cnt.textContent = `${total} entr${total === 1 ? 'y' : 'ies'} on disk`;
+  const el = $('#logTable'); if (!el) return;
+  if (logs.length === 0) { el.innerHTML = '<div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div>'; return; }
   const statusColor = s => s === 'ok' ? 'var(--ok)' : (s === 'all-failed' || s === 'mid-stream-err') ? 'var(--err)' : 'var(--warn)';
   const rows = logs.map(e => {
-    // File log uses e.time (ISO string); in-memory uses e.ts (ms integer).
     const t = e.time ? new Date(e.time) : new Date(e.ts || 0);
     const time = t.toLocaleTimeString();
-    // File log stores attempts as flat {label,status,durationMs,error}.
     const attempts = (e.attempts || []).map(a => {
       const skipped = a.status === 'skipped';
-      const icon  = skipped ? '⏸' : a.status === 'ok' ? '✓' : '✗';
+      const glyph = skipped ? SVG.pause : a.status === 'ok' ? SVG.check : SVG.x;
       const color = skipped ? 'var(--warn)' : a.status === 'ok' ? 'var(--ok)' : 'var(--err)';
-      const err   = a.error ? ` — ${escapeHtml(String(a.error).slice(0, 150))}` : '';
-      return `<div style="font-size:11px;color:var(--dim);padding-left:8px"><span style="color:${color}">${icon}</span> ${escapeHtml(a.label || '')} <span style="color:var(--mute)">${a.durationMs}ms${err}</span></div>`;
+      const err = a.error ? ` — ${escapeHtml(String(a.error).slice(0, 150))}` : '';
+      return `<div style="font-size:11px;color:var(--dim);padding-left:8px;display:flex;align-items:center;gap:5px"><span class="i" style="color:${color}">${glyph}</span> ${escapeHtml(a.label || '')} <span style="color:var(--mute)">${a.durationMs}ms${err}</span></div>`;
     }).join('');
     const status = e.finalStatus || e.status || '?';
-    const label  = e.label || (e.attempts && e.attempts[0] && e.attempts[0].label) || '?';
-    const flags  = [e.stream && 'stream', e.hasTools && 'tools', e.hasSystem && 'sys'].filter(Boolean).join(' ');
-    const showAttempts = (e.attempts || []).length > 1 ||
-                         ((e.attempts || []).length === 1 && (e.attempts[0].status === 'err' || e.attempts[0].status === 'skipped'));
-    return `<div style="border-bottom:1px solid var(--line);padding:8px 4px">
-      <div style="display:flex;gap:10px;align-items:baseline">
-        <span style="color:var(--dim);font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;flex-shrink:0">${time}</span>
-        <span style="font-size:12px;font-weight:500;color:${statusColor(status)}">${escapeHtml(status)}</span>
-        <span style="font-size:11.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</span>
-        <span style="font-size:11px;color:var(--mute);flex-shrink:0">${e.totalMs}ms${e.poolSize ? ' · ' + e.poolSize + ' pool' : ''}</span>
-        ${flags ? `<span style="font-size:10px;color:var(--dim);flex-shrink:0">${escapeHtml(flags)}</span>` : ''}
-      </div>
-      ${showAttempts ? attempts : ''}
-    </div>`;
+    const label = e.label || (e.attempts && e.attempts[0] && e.attempts[0].label) || '?';
+    const flags = [e.stream && 'stream', e.hasTools && 'tools', e.hasSystem && 'sys'].filter(Boolean).join(' ');
+    const showAttempts = (e.attempts || []).length > 1 || ((e.attempts || []).length === 1 && (e.attempts[0].status === 'err' || e.attempts[0].status === 'skipped'));
+    return `<div style="border-bottom:1px solid var(--line);padding:8px 4px"><div style="display:flex;gap:10px;align-items:baseline"><span style="color:var(--dim);font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;flex-shrink:0">${time}</span><span style="font-size:12px;font-weight:500;color:${statusColor(status)}">${escapeHtml(status)}</span><span style="font-size:11.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</span><span style="font-size:11px;color:var(--mute);flex-shrink:0">${e.totalMs}ms${e.poolSize ? ' · ' + e.poolSize + ' pool' : ''}</span>${flags ? `<span style="font-size:10px;color:var(--dim);flex-shrink:0">${escapeHtml(flags)}</span>` : ''}</div>${showAttempts ? attempts : ''}</div>`;
   }).join('');
   el.innerHTML = `<div style="max-height:500px;overflow-y:auto">${rows}</div>`;
 }
 
+// ── Listeners ──
 $('#refreshSys').addEventListener('click', refreshSystem);
 $('#installAll').addEventListener('click', () => runInstall('all'));
 $('#installClaude').addEventListener('click', () => runInstall('claude'));
 $('#installNode').addEventListener('click', () => runInstall('node'));
-$('#panelRefresh').addEventListener('click', refreshPanelTest);
-$('#panelImpression').addEventListener('click', async () => { try { await postPanelEvent('impression'); toast('impression sent'); } catch (e) { toast(e.message,false); } });
-$('#panelClick').addEventListener('click', async () => { try { await postPanelEvent('click'); toast('click sent'); } catch (e) { toast(e.message,false); } });
-$('#panelReset').addEventListener('click', async () => { try { await resetPanelEvents(); toast('events reset'); } catch (e) { toast(e.message,false); } });
 $('#saveBtn').addEventListener('click', save);
 $('#testBtn').addEventListener('click', testConn);
 $('#limitsSaveBtn').addEventListener('click', saveLimits);
+$('#optSaveBtn').addEventListener('click', saveOptimization);
+$('#optSaveBtn2').addEventListener('click', saveOptimization);
+wireOptToggles();
 
 loadAll();
 </script>

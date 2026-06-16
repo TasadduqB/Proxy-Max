@@ -178,13 +178,42 @@ Access the web dashboard at **http://localhost:8787** after starting the proxy.
   <img src="assets/social-card.svg" width="700" alt="Proxy Max Dashboard" />
 </p>
 
-The dashboard provides:
-- **🎯 Provider Setup** — Configure credentials with a guided wizard
-- **📊 Live Monitoring** — Real-time request/response visualization
-- **🔀 Model Pool** — Create routing pools for load balancing & fallback
-- **💰 Cost Tracker** — Track spending across all providers with nanoUSD precision
-- **⚡ Optimizer** — Token compression testing & output filtering
-- **🔍 Request Inspector** — Full request/response audit trail
+Everything lives on a **single page** (the old separate `/dashboard` route now
+redirects to the `#dashboard` tab). The app provides:
+- **Dashboard** — Live token, cost and savings analytics with per-model/provider breakdowns
+- **Provider Setup** — Configure credentials with a guided wizard
+- **Model Pool** — Create routing pools for load balancing & fallback
+- **Optimization** — Toggle every cost-saving strategy; all run automatically inside the proxy
+- **Model Catalog** — Browse 100+ supported models
+- **Launch CLI** — Copy-paste commands to point Claude Code at the proxy
+- **System / Diagnostics** — Install the CLI, inspect the request log
+
+### Automatic cost-saving optimizations
+
+All strategies run transparently in the proxy path — there is **no copy/paste**.
+Point Claude Code at the proxy and they apply to every request:
+
+**All stages ship enabled and tuned conservatively** for maximum savings without
+breaking Claude Code's hooks, web search, subagents/Task spawning, tool use or
+streaming. The lossless stages carry zero risk; the lossy ones use gentle
+settings. Tune or disable any from the Optimization tab.
+
+| Strategy | What it does | Default | Lossless? |
+|----------|--------------|---------|-----------|
+| **Prompt caching** | Injects Anthropic `cache_control` breakpoints on system + tool defs (Bedrock). Repeated prefixes cost ~10% of input. Capped at Anthropic's 4-breakpoint limit so it can never error. | On | Yes |
+| **Response cache (SQLite)** | Stores upstream responses in a local SQLite DB keyed by exact request; identical requests replay verbatim (streaming included) at zero upstream cost. TTL-bounded. | On (60 min TTL) | Yes |
+| **Tool-result ANSI stripping** | Strips display-only ANSI escape codes from terminal output. | On | Yes |
+| **Conversation history window** | Sliding window (120 msgs, keeps opening context) to cap long-session cost. | On | Gentle |
+| **Tool-definition compression** | Trims descriptions past 800 chars; preserves names + schemas exactly. | On | Gentle |
+| **Prose compression** | Drops filler words from prose (`lite` mode; up to 6 modes). | On | Gentle |
+
+### Storage
+
+Persistence (analytics + the response cache) uses Node's **built-in
+`node:sqlite`** (Node 22.5+) at `~/.proxy-max/proxy-max.db` — no native module to
+compile. On older Node it transparently falls back to a JSON file, so the app is
+always plug-and-play. The bundled portable-Node installer fetches Node 22 LTS so
+SQLite is available out of the box.
 
 ---
 
@@ -380,14 +409,22 @@ proxy-max/
 │   │   ├── _common.js         # Protocol translation engine
 │   │   ├── bedrock.js         # AWS Bedrock (SigV4)
 │   │   └── openai_compat.js   # Azure/NVIDIA (OpenAI format)
+│   ├── optimizers/            # Proxy-layer cost optimizers:
+│   │   ├── cache-injector.js     #   prompt-cache breakpoints
+│   │   ├── tool-result-filter.js #   ANSI/blank/size filtering
+│   │   ├── history-trimmer.js    #   sliding-window history
+│   │   └── tool-compressor.js    #   tool-description trimming
+│   ├── cache/                 # Persistence + response cache:
+│   │   ├── sqlite-store.js       #   node:sqlite store (JSON fallback)
+│   │   └── response-cache.js     #   lossless exact-match response cache
 │   ├── token-analyzer/        # Token counting engine
 │   ├── cost-calculator/       # Pricing & cost tracking
-│   ├── compression/           # Prompt optimization
+│   ├── compression/           # Prose compression
 │   ├── output-filters/        # CLI output compression
-│   ├── analytics/             # SQLite analytics engine
-│   └── dashboard/             # Dashboard API routes
+│   ├── analytics/             # Analytics engine (JSON store)
+│   └── dashboard/             # Dashboard analytics API routes
 ├── ui/
-│   └── dashboard.html         # Web dashboard SPA
+│   └── index.html             # Single-page app (config + dashboard + optimization)
 ├── package.json
 └── config.json                # Your configuration
 ```

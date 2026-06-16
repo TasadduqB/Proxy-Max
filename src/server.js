@@ -16,9 +16,16 @@ const ProseCompressor = require('./compression/prose-compressor');
 const { OutputFilter, BUILTIN_FILTERS } = require('./output-filters/filter');
 const DASHBOARD_ROUTES = require('./dashboard/routes');
 
+const HistoryTrimmer   = require('./optimizers/history-trimmer');
+const ToolCompressor   = require('./optimizers/tool-compressor');
+const CacheInjector    = require('./optimizers/cache-injector');
+const ToolResultFilter = require('./optimizers/tool-result-filter');
+
+const { SqliteStore }  = require('./cache/sqlite-store');
+const ResponseCache    = require('./cache/response-cache');
+
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH        = process.env.PROXY_MAX_CONFIG       || path.join(ROOT, 'config.json');
-const PANEL_EVENTS_PATH  = process.env.PROXY_MAX_PANEL_EVENTS || path.join(ROOT, 'panel-events.json');
 const LOG_DIR            = process.env.PROXY_MAX_LOG_DIR      || path.join(ROOT, 'logs');
 const LOG_FILE           = path.join(LOG_DIR, 'requests.log');
 const LOG_MAX_BYTES      = 10 * 1024 * 1024; // 10 MB before rotation
@@ -37,28 +44,82 @@ function saveConfig(cfg) {
 
 let CONFIG = loadConfig();
 
+// ---- Persistent store (SQLite via node:sqlite, JSON fallback) ----
+const store = new SqliteStore();
+console.log(`[proxy] store backend: ${store.info().backend} (${store.info().dbFile})`);
+
 // ---- Analytics / dashboard utilities ----
-const analytics    = new AnalyticsEngine();
+const analytics    = new AnalyticsEngine(null, store);
 const tokenCounter = new TokenCounter();
 const pricingCalc  = new PricingCalculator();
 const compressor   = new ProseCompressor();
+// ---- Proxy-layer optimizers (run automatically on every request) ----
+const historyTrimmer = new HistoryTrimmer();
+const toolCompressor = new ToolCompressor();
+const cacheInjector  = new CacheInjector();
+const responseCache  = new ResponseCache(store);
+// Drop expired cache rows hourly.
+setInterval(() => { try { store.cachePrune(); } catch {} }, 60 * 60 * 1000).unref?.();
 // Shared deps object threaded into every dashboard route handler.
 const dashDeps = { analytics, tokenCounter, pricingCalc, compressor };
 
-function loadPanelEvents() {
-  try {
-    const raw = fs.readFileSync(PANEL_EVENTS_PATH, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-  } catch {}
-  return [];
+// ---- Unified optimization config ----------------------------------------
+// Every cost-saving strategy is configured here and applied transparently in
+// the proxy path — there is no manual copy/paste UI. Defaults are tuned to be
+// safe for Claude Code (lossless or near-lossless) so they can ship enabled.
+// Defaults: EVERYTHING ON, tuned conservatively ("enable everything, tuned
+// safe"). Lossless stages run with zero risk; the lossy stages use gentle
+// settings — a large history window, a generous tool-description cap, and the
+// mildest prose mode — so they save tokens without starving Claude Code of the
+// context it needs for hooks, web search, subagents and accurate tool use.
+//   • cacheInject   — Anthropic prompt-cache hints; capped at the 4-breakpoint
+//                     limit so it can never error. (lossless)
+//   • responseCache — exact-match SQLite response cache; identical requests
+//                     replay verbatim at zero upstream cost. (lossless)
+//   • toolResults   — ANSI stripping on; blank-collapse/truncation off. (lossless)
+//   • historyTrim   — wide 120-message window, keeps opening context. (gentle)
+//   • toolCompress  — trims descriptions only past 800 chars; schemas intact. (gentle)
+//   • compression   — 'lite' (filler words only); never touches articles/code. (gentle)
+const DEFAULT_OPTIMIZATION = {
+  cacheInject:   { enabled: true },
+  responseCache: { enabled: true, ttlMinutes: 60 },
+  toolResults:   { enabled: true, stripAnsi: true, stripBlankLines: false, maxChars: 0 },
+  historyTrim:   { enabled: true, maxMessages: 120, keepFirstN: 4 },
+  toolCompress:  { enabled: true, maxDescLength: 800, stripExamples: true },
+  compression:   { enabled: true, mode: 'lite' },
+};
+
+function getOptimization() {
+  const o = CONFIG.optimization || {};
+  // Back-compat: fold a legacy top-level CONFIG.compression into the new shape.
+  const legacyCompression = (!o.compression && CONFIG.compression) ? CONFIG.compression : null;
+  return {
+    compression:   { ...DEFAULT_OPTIMIZATION.compression,   ...(legacyCompression || {}), ...(o.compression   || {}) },
+    toolResults:   { ...DEFAULT_OPTIMIZATION.toolResults,   ...(o.toolResults   || {}) },
+    historyTrim:   { ...DEFAULT_OPTIMIZATION.historyTrim,   ...(o.historyTrim   || {}) },
+    toolCompress:  { ...DEFAULT_OPTIMIZATION.toolCompress,  ...(o.toolCompress  || {}) },
+    cacheInject:   { ...DEFAULT_OPTIMIZATION.cacheInject,   ...(o.cacheInject   || {}) },
+    responseCache: { ...DEFAULT_OPTIMIZATION.responseCache, ...(o.responseCache || {}) },
+  };
 }
 
-function savePanelEvents(events) {
-  fs.writeFileSync(PANEL_EVENTS_PATH, JSON.stringify(events, null, 2));
-}
-
-let PANEL_EVENTS = loadPanelEvents();
+// Live counters surfaced on the dashboard ("savings since startup").
+const OPT_STATS = {
+  startedAt: Date.now(),
+  requests: 0,
+  toolResultsFiltered: 0,
+  toolResultCharsSaved: 0,
+  historyMessagesTrimmed: 0,
+  toolDescCharsSaved: 0,
+  proseCharsSaved: 0,
+  cacheBreakpointsInjected: 0,
+  estTokensSaved: 0,
+  responseCacheHits: 0,
+  responseCacheMisses: 0,
+  responseCacheStored: 0,
+  responseCacheTokensSaved: 0,
+  responseCacheCostSavedNano: 0,
+};
 
 function send(res, status, body, headers = {}) {
   const isString = typeof body === 'string' || Buffer.isBuffer(body);
@@ -360,6 +421,54 @@ function sniffUsage(res, onUsage) {
   return res;
 }
 
+// Tee res.write/res.end to accumulate the FULL response body (for the response
+// cache). Caps at maxBytes — past that we give up capturing (don't cache huge
+// responses) but never disturb the live stream to the client. The assembled
+// buffer is exposed on res._capturedBody once res.end fires.
+function captureResponse(res, maxBytes = 2_000_000) {
+  const origWrite = res.write.bind(res);
+  const origEnd = res.end.bind(res);
+  const chunks = [];
+  let size = 0;
+  let overflow = false;
+  const take = (chunk) => {
+    if (overflow || !chunk) return;
+    const b = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += b.length;
+    if (size > maxBytes) { overflow = true; chunks.length = 0; return; }
+    chunks.push(b);
+  };
+  res.write = (chunk, ...a) => { take(chunk); return origWrite(chunk, ...a); };
+  res.end = (chunk, ...a) => {
+    take(chunk);
+    res._capturedBody = overflow ? null : Buffer.concat(chunks);
+    return origEnd(chunk, ...a);
+  };
+  return res;
+}
+
+function setAnthropicRateLimitHeaders(res, limiterState) {
+  // Return synthetic generous limits so Claude Code doesn't self-throttle.
+  // Use actual remaining budget from our local limiter if available.
+  const limits = getLimits();
+  const nowRpm = limiterState?.reqs?.length || 0;
+  const nowTpm = limiterState?.tokenSum?.() || 0;
+  const rpmRemaining = Math.max(0, (limits.rpm || 40000) - nowRpm);
+  const tpmRemaining = Math.max(0, (limits.tpm || 2000000) - nowTpm);
+  const resetTime = new Date(Date.now() + 60000).toISOString();
+
+  res.setHeader('anthropic-ratelimit-requests-limit', String(limits.rpm || 40000));
+  res.setHeader('anthropic-ratelimit-requests-remaining', String(rpmRemaining));
+  res.setHeader('anthropic-ratelimit-requests-reset', resetTime);
+  res.setHeader('anthropic-ratelimit-tokens-limit', String(limits.tpm || 2000000));
+  res.setHeader('anthropic-ratelimit-tokens-remaining', String(tpmRemaining));
+  res.setHeader('anthropic-ratelimit-tokens-reset', resetTime);
+  res.setHeader('anthropic-ratelimit-input-tokens-limit', String(Math.floor((limits.tpm || 2000000) / 2)));
+  res.setHeader('anthropic-ratelimit-input-tokens-remaining', String(Math.floor(tpmRemaining / 2)));
+  res.setHeader('anthropic-ratelimit-output-tokens-limit', String(Math.floor((limits.tpm || 2000000) / 2)));
+  res.setHeader('anthropic-ratelimit-output-tokens-remaining', String(Math.floor(tpmRemaining / 2)));
+}
+
 async function handleMessages(req, res) {
   const pool = getPool();
   if (pool.length === 0) {
@@ -384,13 +493,16 @@ async function handleMessages(req, res) {
       }, { 'retry-after': String(verdict.retryAfter) });
     }
     limiter.recordRequest(now);
-    res = sniffUsage(res, (inputN, outputN) => {
-      limiter.recordTokens(Date.now(), inputN + outputN);
-      // Stash for analytics logging after the response ends.
-      res._analyticsInput = inputN;
-      res._analyticsOutput = outputN;
-    });
+    setAnthropicRateLimitHeaders(res, limiter);
   }
+
+  // Always sniff usage so analytics + cache savings have real token counts,
+  // even when rate limiting is disabled.
+  res = sniffUsage(res, (inputN, outputN) => {
+    if (limits.enabled) limiter.recordTokens(Date.now(), inputN + outputN);
+    res._analyticsInput = inputN;
+    res._analyticsOutput = outputN;
+  });
 
   let body;
   try { body = await readJSONBody(req); }
@@ -405,25 +517,139 @@ async function handleMessages(req, res) {
     });
   }
 
-  // Apply prose compression to system prompt and message text blocks if enabled.
-  if (CONFIG.compression?.enabled) {
-    const compMode = CONFIG.compression.mode || 'lite';
+  const opt = getOptimization();
+
+  // ── Response cache (lossless, exact-match) ─────────────────────────────
+  // Key on the ORIGINAL request (pre-optimization) so identical CLI requests
+  // hit regardless of current optimization settings. A hit replays the exact
+  // upstream bytes (streaming SSE included) at zero upstream cost.
+  const requestedModelForKey = body.model || 'claude-sonnet-4-20250514';
+  let cacheKey = null;
+  if (opt.responseCache.enabled) {
+    cacheKey = responseCache.makeKey(requestedModelForKey, body);
+    const hit = cacheKey ? responseCache.get(cacheKey) : null;
+    if (hit) {
+      OPT_STATS.responseCacheHits++;
+      const savedTokens = (hit.inputTokens || 0) + (hit.outputTokens || 0);
+      OPT_STATS.responseCacheTokensSaved += savedTokens;
+      const costSaved = pricingCalc.calculateCostNano(hit.inputTokens || 0, hit.outputTokens || 0, requestedModelForKey);
+      OPT_STATS.responseCacheCostSavedNano += costSaved?.cost_nano_usd || 0;
+      // Record a zero-cost cache-hit request for the dashboard.
+      try {
+        analytics.logRequest({
+          provider: 'cache', model: requestedModelForKey,
+          inputTokens: hit.inputTokens || 0, outputTokens: hit.outputTokens || 0,
+          cachedTokens: savedTokens, costNanoUsd: 0,
+          compressionMode: 'response-cache', responseTimeMs: 0, status: 'cache_hit'
+        });
+      } catch {}
+      // Build a fresh log entry for the hit.
+      pushLog({
+        id: Math.random().toString(36).slice(2, 10), ts: Date.now(),
+        request: summarizeRequestBody(body), stream: !!body.stream,
+        hasTools: !!(body.tools && body.tools.length), hasSystem: !!body.system,
+        poolSize: 0, finalStatus: 'cache-hit', totalMs: 0,
+        attempts: [{ label: 'response-cache', provider: 'cache', model: requestedModelForKey, status: 'ok', durationMs: 0 }]
+      });
+      console.log(`[proxy] [cache-hit] ${requestedModelForKey} saved ~${savedTokens} tokens`);
+      res.writeHead(200, { 'Content-Type': hit.contentType || 'application/json' });
+      return res.end(hit.body);
+    }
+    OPT_STATS.responseCacheMisses++;
+    // On a miss, capture the full upstream response so we can store it on success.
+    res = captureResponse(res, 2_000_000);
+  }
+
+  // ── Proxy-layer optimization pipeline ──────────────────────────────────
+  // Runs automatically on every request. Each stage is independently gated by
+  // CONFIG.optimization and tracked for savings. Ordering matters: filter and
+  // trim before measuring, compress prose last, inject cache breakpoints per
+  // provider (handled later in sanitizeBodyForProvider for Bedrock).
+  const optApplied = [];     // human-readable list of stages that fired
+  let optEstTokensSaved = 0; // rough estimate (~4 chars / token)
+  OPT_STATS.requests++;
+
+  // Stage 1 — Filter verbose tool_result blocks (strip ANSI, blank lines, cap size).
+  if (opt.toolResults.enabled && Array.isArray(body.messages)) {
+    const trf = new ToolResultFilter({
+      stripAnsi:       opt.toolResults.stripAnsi,
+      stripBlankLines: opt.toolResults.stripBlankLines,
+      maxChars:        opt.toolResults.maxChars,
+    });
+    const r = trf.filterMessages(body.messages);
+    if (r.savedChars > 0) {
+      body.messages = r.messages;
+      OPT_STATS.toolResultsFiltered += r.filteredCount;
+      OPT_STATS.toolResultCharsSaved += r.savedChars;
+      optEstTokensSaved += r.savedChars / 4;
+      optApplied.push(`tool-results(-${r.savedChars}c)`);
+    }
+  }
+
+  // Stage 2 — Sliding-window history trim.
+  if (opt.historyTrim.enabled && Array.isArray(body.messages)) {
+    const r = historyTrimmer.trim(body.messages, {
+      maxMessages: opt.historyTrim.maxMessages,
+      keepFirstN:  opt.historyTrim.keepFirstN,
+    });
+    if (r.trimmed > 0) {
+      body.messages = r.messages;
+      OPT_STATS.historyMessagesTrimmed += r.trimmed;
+      // Estimate ~250 tokens per dropped message (conservative).
+      optEstTokensSaved += r.trimmed * 250;
+      optApplied.push(`history(-${r.trimmed}msg)`);
+    }
+  }
+
+  // Stage 3 — Compress verbose tool descriptions.
+  if (opt.toolCompress.enabled && Array.isArray(body.tools)) {
+    const r = toolCompressor.compress(body.tools, {
+      maxDescLength: opt.toolCompress.maxDescLength,
+      stripExamples: opt.toolCompress.stripExamples,
+    });
+    if (r.savedChars > 0) {
+      body.tools = r.tools;
+      OPT_STATS.toolDescCharsSaved += r.savedChars;
+      optEstTokensSaved += r.savedChars / 4;
+      optApplied.push(`tool-defs(-${r.savedChars}c)`);
+    }
+  }
+
+  // Stage 4 — Prose compression of system prompt + message text blocks.
+  if (opt.compression.enabled) {
+    const compMode = opt.compression.mode || 'lite';
+    let proseSaved = 0;
     if (body.system && typeof body.system === 'string') {
+      const before = body.system.length;
       body.system = compressor.compress(body.system, compMode);
+      proseSaved += Math.max(0, before - body.system.length);
     }
     if (Array.isArray(body.messages)) {
       for (const msg of body.messages) {
         if (Array.isArray(msg.content)) {
           for (const block of msg.content) {
             if (block && block.type === 'text' && typeof block.text === 'string') {
+              const before = block.text.length;
               block.text = compressor.compress(block.text, compMode);
+              proseSaved += Math.max(0, before - block.text.length);
             }
           }
         }
       }
     }
     body._compressionMode = compMode;
+    if (proseSaved > 0) {
+      OPT_STATS.proseCharsSaved += proseSaved;
+      optEstTokensSaved += proseSaved / 4;
+      optApplied.push(`prose:${compMode}(-${proseSaved}c)`);
+    }
   }
+
+  optEstTokensSaved = Math.round(optEstTokensSaved);
+  OPT_STATS.estTokensSaved += optEstTokensSaved;
+  body._optApplied = optApplied;
+  body._optEstTokensSaved = optEstTokensSaved;
+  body._cacheInject = opt.cacheInject.enabled;
 
   // Build log entry for this request.
   const reqId = Math.random().toString(36).slice(2, 10);
@@ -443,6 +669,53 @@ async function handleMessages(req, res) {
   };
   const reqStart = Date.now();
   attachRequestTrace(res, logEntry, reqStart);
+
+  // Strip cache_control from providers that don't support it, and reject
+  // computer-use tools for providers other than Bedrock.
+  function sanitizeBodyForProvider(b, cfg) {
+    const kind = cfg.kind;
+    const out = { ...b };
+
+    // NIM doesn't support cache_control — strip it from all content blocks.
+    if (kind === 'nvidia') {
+      if (out.system && Array.isArray(out.system)) {
+        out.system = out.system.map(blk => { const { cache_control, ...rest } = blk; return rest; });
+      }
+      if (out.messages) {
+        out.messages = out.messages.map(msg => ({
+          ...msg,
+          content: Array.isArray(msg.content)
+            ? msg.content.map(blk => { const { cache_control, ...rest } = blk; return rest; })
+            : msg.content
+        }));
+      }
+      if (out.tools) {
+        out.tools = out.tools.map(t => { const { cache_control, ...rest } = t; return rest; });
+      }
+    }
+
+    // Detect computer-use tools — only Bedrock supports them.
+    const hasComputerUse = (out.tools || []).some(t => t.type && t.type.startsWith('computer_'));
+    if (hasComputerUse && kind !== 'bedrock') {
+      throw Object.assign(
+        new Error(`Computer-use tools are not supported by provider "${kind}". Use AWS Bedrock.`),
+        { status: 400, stage: 'validation' }
+      );
+    }
+
+    // Inject Anthropic prompt-cache breakpoints (Bedrock is the only Anthropic-
+    // native path here). Cache hits on the system prompt + tool definitions cost
+    // ~10% of normal input — the single biggest lever for Claude Code sessions.
+    if (kind === 'bedrock' && b._cacheInject) {
+      const r = cacheInjector.inject(out, kind);
+      if (r.injected > 0) {
+        Object.assign(out, r.body);
+        OPT_STATS.cacheBreakpointsInjected += r.injected;
+      }
+    }
+
+    return out;
+  }
 
   // Round-robin + fallback with circuit breaker.
   // Members in cooldown are skipped instantly (no upstream call).
@@ -492,8 +765,9 @@ async function handleMessages(req, res) {
     };
 
     try {
-      if (cfg.kind === 'bedrock') await callBedrock(cfg, body, res);
-      else await callOpenAICompatible(cfg, body, res);
+      const sanitizedBody = sanitizeBodyForProvider(body, cfg);
+      if (cfg.kind === 'bedrock') await callBedrock(cfg, sanitizedBody, res);
+      else await callOpenAICompatible(cfg, sanitizedBody, res);
       attemptLog.durationMs = Date.now() - t0;
       stat.lastMs = attemptLog.durationMs;
       stat.consecutiveFails = 0;
@@ -510,16 +784,37 @@ async function handleMessages(req, res) {
           const inputTokens = res._analyticsInput || 0;
           const outputTokens = res._analyticsOutput || 0;
           const costResult = pricingCalc.calculateCostNano(inputTokens, outputTokens, cfg.model);
+          // Record optimizer savings so the dashboard's tokens-saved / cost-saved
+          // figures reflect the proxy-layer work. original = what we *would* have
+          // sent; compressed = what we actually sent.
+          const saved = body._optEstTokensSaved || 0;
+          const actualTokens = inputTokens + outputTokens;
           analytics.logRequest({
             provider: cfg.kind,
             model: cfg.model,
             inputTokens,
             outputTokens,
             costNanoUsd: costResult?.cost_nano_usd || 0,
-            compressionMode: body._compressionMode || 'none',
+            compressionMode: (body._optApplied && body._optApplied.length)
+              ? (body._compressionMode || 'optimized')
+              : 'none',
+            originalTokenCount: actualTokens + saved,
+            compressedTokenCount: actualTokens,
             responseTimeMs: attemptLog.durationMs,
             status: 'success'
           });
+
+          // Store the captured response in the lossless cache (success only).
+          if (opt.responseCache.enabled && cacheKey && res._capturedBody && res._capturedBody.length > 0) {
+            const ttlMs = Math.max(0, (Number(opt.responseCache.ttlMinutes) || 0) * 60 * 1000);
+            responseCache.set(cacheKey, {
+              body: res._capturedBody,
+              contentType: res.getHeader ? (res.getHeader('content-type') || 'application/json') : 'application/json',
+              inputTokens, outputTokens, ttlMs,
+              provider: cfg.kind, model: requestedModel,
+            });
+            OPT_STATS.responseCacheStored++;
+          }
         } catch (e) {
           console.error('[proxy] [analytics] logRequest error:', e.message);
         }
@@ -610,7 +905,7 @@ async function handleCountTokens(req, res) {
   try {
     const body = await readJSONBody(req);
     const tokens = tokenCounter.estimateTokens(JSON.stringify(body), { provider: 'anthropic' });
-    send(res, 200, { input_tokens: tokens });
+    send(res, 200, { input_tokens: tokens, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 });
   } catch (err) {
     send(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: err.message } });
   }
@@ -645,16 +940,71 @@ async function handleConfigPost(req, res) {
 }
 
 function handleCompressionGet(_req, res) {
-  send(res, 200, CONFIG.compression || { enabled: false, mode: 'lite' });
+  send(res, 200, getOptimization().compression);
 }
 
 async function handleCompressionPost(req, res) {
   const body = await readJSONBody(req);
-  CONFIG.compression = CONFIG.compression || {};
-  if (typeof body.enabled === 'boolean') CONFIG.compression.enabled = body.enabled;
-  if (body.mode && typeof body.mode === 'string') CONFIG.compression.mode = body.mode;
+  CONFIG.optimization = CONFIG.optimization || {};
+  CONFIG.optimization.compression = { ...getOptimization().compression };
+  if (typeof body.enabled === 'boolean') CONFIG.optimization.compression.enabled = body.enabled;
+  if (body.mode && typeof body.mode === 'string') CONFIG.optimization.compression.mode = body.mode;
+  delete CONFIG.compression; // retire the legacy top-level key
   saveConfig(CONFIG);
-  send(res, 200, { ok: true, compression: CONFIG.compression });
+  send(res, 200, { ok: true, compression: CONFIG.optimization.compression });
+}
+
+// ---- Unified optimization config + live stats ----
+
+function handleOptimizationGet(_req, res) {
+  send(res, 200, { optimization: getOptimization(), defaults: DEFAULT_OPTIMIZATION });
+}
+
+async function handleOptimizationPost(req, res) {
+  const body = await readJSONBody(req);
+  const incoming = body.optimization || body;
+  const current = getOptimization();
+  const next = {};
+  // Deep-merge each known section; ignore unknown keys.
+  for (const section of Object.keys(DEFAULT_OPTIMIZATION)) {
+    next[section] = { ...current[section], ...(incoming[section] || {}) };
+  }
+  // Coerce numeric fields defensively.
+  next.toolResults.maxChars       = Math.max(0, Number(next.toolResults.maxChars)       || 0);
+  next.historyTrim.maxMessages    = Math.max(2, Number(next.historyTrim.maxMessages)    || 2);
+  next.historyTrim.keepFirstN     = Math.max(0, Number(next.historyTrim.keepFirstN)     || 0);
+  next.toolCompress.maxDescLength = Math.max(40, Number(next.toolCompress.maxDescLength) || 40);
+  next.responseCache.ttlMinutes   = Math.max(0, Number(next.responseCache.ttlMinutes)   || 0);
+  CONFIG.optimization = next;
+  delete CONFIG.compression;
+  saveConfig(CONFIG);
+  send(res, 200, { ok: true, optimization: getOptimization() });
+}
+
+function handleOptimizationStats(_req, res) {
+  const uptimeMs = Date.now() - OPT_STATS.startedAt;
+  const totalCharsSaved = OPT_STATS.toolResultCharsSaved + OPT_STATS.toolDescCharsSaved + OPT_STATS.proseCharsSaved;
+  // Cost-saved estimate: optimizer-saved tokens at a representative input rate
+  // (~$3 / 1M) plus the actual cost avoided by response-cache hits.
+  const estCostSavedUsd = (OPT_STATS.estTokensSaved / 1e6) * 3.0 + (OPT_STATS.responseCacheCostSavedNano / 1e9);
+  const cacheStats = store.cacheStats();
+  const hitRate = (OPT_STATS.responseCacheHits + OPT_STATS.responseCacheMisses) > 0
+    ? OPT_STATS.responseCacheHits / (OPT_STATS.responseCacheHits + OPT_STATS.responseCacheMisses)
+    : 0;
+  send(res, 200, {
+    ...OPT_STATS,
+    uptimeMs,
+    totalCharsSaved,
+    estCostSavedUsd: Number(estCostSavedUsd.toFixed(6)),
+    storeBackend: store.info().backend,
+    storeFile: store.info().dbFile,
+    cache: { ...cacheStats, hitRate: Number(hitRate.toFixed(3)) },
+  });
+}
+
+function handleCacheClear(_req, res) {
+  try { store.cacheClear(); OPT_STATS.responseCacheStored = 0; send(res, 200, { ok: true }); }
+  catch (e) { send(res, 500, { ok: false, error: e.message }); }
 }
 
 async function handleAnalyticsGet(_req, res) {
@@ -831,80 +1181,6 @@ async function handleInstall(req, res) {
   });
 }
 
-function summarizePanelEvents(events) {
-  const summary = {
-    total: events.length,
-    impressions: 0,
-    clicks: 0,
-    watchMsTotal: 0,
-    ctr: 0,
-    byAd: {}
-  };
-
-  for (const evt of events) {
-    if (evt.type === 'impression') summary.impressions += 1;
-    if (evt.type === 'click') summary.clicks += 1;
-    if (Number.isFinite(evt.watchMs) && evt.watchMs > 0) summary.watchMsTotal += evt.watchMs;
-
-    const adKey = evt.adId || 'unknown';
-    if (!summary.byAd[adKey]) summary.byAd[adKey] = { impressions: 0, clicks: 0 };
-    if (evt.type === 'impression') summary.byAd[adKey].impressions += 1;
-    if (evt.type === 'click') summary.byAd[adKey].clicks += 1;
-  }
-
-  summary.ctr = summary.impressions > 0 ? Number((summary.clicks / summary.impressions).toFixed(4)) : 0;
-  return summary;
-}
-
-async function handlePanelEventPost(req, res) {
-  let body;
-  try {
-    body = await readJSONBody(req);
-  } catch {
-    return send(res, 400, { ok: false, error: 'Bad JSON' });
-  }
-
-  const type = String(body.type || '').trim().toLowerCase();
-  if (!type || (type !== 'impression' && type !== 'click')) {
-    return send(res, 400, { ok: false, error: 'type must be impression or click' });
-  }
-
-  const event = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    ts: new Date().toISOString(),
-    type,
-    adId: body.adId ? String(body.adId) : 'unknown',
-    impressionId: body.impressionId ? String(body.impressionId) : null,
-    sessionId: body.sessionId ? String(body.sessionId) : null,
-    watchMs: Number.isFinite(Number(body.watchMs)) ? Math.max(0, Number(body.watchMs)) : 0,
-    source: body.source ? String(body.source) : 'local-test'
-  };
-
-  PANEL_EVENTS.push(event);
-  if (PANEL_EVENTS.length > 2000) PANEL_EVENTS = PANEL_EVENTS.slice(-2000);
-  savePanelEvents(PANEL_EVENTS);
-
-  return send(res, 200, { ok: true, event, summary: summarizePanelEvents(PANEL_EVENTS) });
-}
-
-function handlePanelEventsGet(req, res) {
-  const u = new URL(req.url, 'http://localhost');
-  const limitRaw = Number.parseInt(u.searchParams.get('limit') || '100', 10);
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 100;
-  const events = PANEL_EVENTS.slice(-limit).reverse();
-  return send(res, 200, { ok: true, count: events.length, events });
-}
-
-function handlePanelSummaryGet(_req, res) {
-  return send(res, 200, { ok: true, summary: summarizePanelEvents(PANEL_EVENTS) });
-}
-
-function handlePanelResetPost(_req, res) {
-  PANEL_EVENTS = [];
-  savePanelEvents(PANEL_EVENTS);
-  return send(res, 200, { ok: true });
-}
-
 function handleLaunchCommand(_req, res) {
   const port = parseInt(process.env.PORT || '8787', 10);
   const host = process.env.HOST || '127.0.0.1';
@@ -1024,13 +1300,21 @@ function handleV1Models(_req, res) {
   // Surface a realistic-looking Claude model list so Claude Code doesn't fall into
   // degraded mode. The actual upstream model is transparent to the CLI.
   // Include max_input_tokens, max_tokens, capabilities so the SDK can use them.
+  const provider = CONFIG.provider;
+  // Determine capabilities based on active provider.
+  const supportsComputerUse   = provider === 'bedrock'; // Only Bedrock supports computer-use
+  const supportsThinking      = provider !== 'nvidia';  // NIM doesn't support extended thinking
+  const supportsPromptCaching = provider !== 'nvidia';  // NIM doesn't support prompt caching
+  const supportsVision        = provider !== 'nvidia';  // NIM has limited vision support
+
   const data = [
-    { type: 'model', id: 'claude-opus-4-20250514',   display_name: 'Claude Opus 4',     created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 32000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
-    { type: 'model', id: 'claude-opus-4-8',           display_name: 'Claude Opus 4.8',   created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 32000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
-    { type: 'model', id: 'claude-sonnet-4-20250514',  display_name: 'Claude Sonnet 4',   created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
-    { type: 'model', id: 'claude-sonnet-4-6',         display_name: 'Claude Sonnet 4.6', created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000,  capabilities: { vision: true, tool_use: true, extended_thinking: true } },
-    { type: 'model', id: 'claude-haiku-4-5-20251001', display_name: 'Claude Haiku 4.5',  created_at: '2025-10-01T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000,  capabilities: { vision: true, tool_use: true } },
-    { type: 'model', id: 'claude-3-5-sonnet-20241022',display_name: 'Claude 3.5 Sonnet', created_at: '2024-10-22T00:00:00Z', max_input_tokens: 200000, max_tokens: 8192,   capabilities: { vision: true, tool_use: true } },
+    { type: 'model', id: 'claude-opus-4-20250514',    display_name: 'Claude Opus 4',      created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 32000, capabilities: { vision: supportsVision, tool_use: true, extended_thinking: supportsThinking, computer_use: supportsComputerUse, prompt_caching: supportsPromptCaching } },
+    { type: 'model', id: 'claude-opus-4-8',            display_name: 'Claude Opus 4.8',    created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 32000, capabilities: { vision: supportsVision, tool_use: true, extended_thinking: supportsThinking, computer_use: supportsComputerUse, prompt_caching: supportsPromptCaching } },
+    { type: 'model', id: 'claude-sonnet-4-20250514',   display_name: 'Claude Sonnet 4',    created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000, capabilities: { vision: supportsVision, tool_use: true, extended_thinking: supportsThinking, computer_use: false, prompt_caching: supportsPromptCaching } },
+    { type: 'model', id: 'claude-sonnet-4-6',          display_name: 'Claude Sonnet 4.6',  created_at: '2025-05-14T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000, capabilities: { vision: supportsVision, tool_use: true, extended_thinking: supportsThinking, computer_use: false, prompt_caching: supportsPromptCaching } },
+    { type: 'model', id: 'claude-haiku-4-5-20251001',  display_name: 'Claude Haiku 4.5',   created_at: '2025-10-01T00:00:00Z', max_input_tokens: 200000, max_tokens: 16000, capabilities: { vision: supportsVision, tool_use: true, extended_thinking: false, computer_use: false, prompt_caching: supportsPromptCaching } },
+    { type: 'model', id: 'claude-3-5-sonnet-20241022', display_name: 'Claude 3.5 Sonnet',  created_at: '2024-10-22T00:00:00Z', max_input_tokens: 200000, max_tokens: 8192,  capabilities: { vision: supportsVision, tool_use: true, extended_thinking: false, computer_use: false, prompt_caching: supportsPromptCaching } },
+    { type: 'model', id: 'claude-fable-5',             display_name: 'Claude Fable 5',     created_at: '2026-01-01T00:00:00Z', max_input_tokens: 200000, max_tokens: 32000, capabilities: { vision: supportsVision, tool_use: true, extended_thinking: supportsThinking, computer_use: supportsComputerUse, prompt_caching: supportsPromptCaching } },
   ];
   send(res, 200, { data, has_more: false, first_id: data[0].id, last_id: data[data.length - 1].id });
 }
@@ -1042,8 +1326,14 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, anthropic-version, anthropic-beta');
-  // request-id — Claude Code uses this for client-side request correlation/tracing.
-  res.setHeader('request-id', `proxy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`);
+  // request-id — echo back client's id if provided, otherwise generate one.
+  const clientReqId = req.headers['request-id'] || req.headers['x-request-id'];
+  const proxyReqId = clientReqId || `proxy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  res.setHeader('request-id', proxyReqId);
+  res.setHeader('x-request-id', proxyReqId);
+  // anthropic-version — expected by Claude Code SDK on every response.
+  res.setHeader('anthropic-version', '2023-06-01');
+  res.setHeader('cache-control', 'private, no-cache');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   try {
@@ -1065,11 +1355,11 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/limits' && req.method === 'POST') return await handleLimitsPost(req, res);
     if (u.pathname === '/api/compression' && req.method === 'GET') return handleCompressionGet(req, res);
     if (u.pathname === '/api/compression' && req.method === 'POST') return await handleCompressionPost(req, res);
+    if (u.pathname === '/api/optimization' && req.method === 'GET') return handleOptimizationGet(req, res);
+    if (u.pathname === '/api/optimization' && req.method === 'POST') return await handleOptimizationPost(req, res);
+    if (u.pathname === '/api/optimization/stats' && req.method === 'GET') return handleOptimizationStats(req, res);
+    if (u.pathname === '/api/cache/clear' && req.method === 'POST') return handleCacheClear(req, res);
     if (u.pathname === '/api/analytics' && req.method === 'GET') return await handleAnalyticsGet(req, res);
-    if (u.pathname === '/api/panel/event' && req.method === 'POST') return await handlePanelEventPost(req, res);
-    if (u.pathname === '/api/panel/events' && req.method === 'GET') return handlePanelEventsGet(req, res);
-    if (u.pathname === '/api/panel/summary' && req.method === 'GET') return handlePanelSummaryGet(req, res);
-    if (u.pathname === '/api/panel/reset' && req.method === 'POST') return handlePanelResetPost(req, res);
     if (u.pathname === '/api/pool' && req.method === 'GET') return handlePoolGet(req, res);
     if (u.pathname === '/api/pool' && req.method === 'POST') return await handlePoolPost(req, res);
     if (u.pathname === '/api/pool/reset-circuits' && req.method === 'POST') return handlePoolResetCircuits(req, res);
@@ -1091,20 +1381,14 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/launch/command' && req.method === 'GET') return handleLaunchCommand(req, res);
     if (u.pathname === '/api/reload') { CONFIG = loadConfig(); return send(res, 200, { ok: true }); }
 
-    // ---- Dashboard routes ----
+    // ---- Dashboard analytics routes (read-only data for the Dashboard tab) ----
     const dashKey = `${req.method} ${u.pathname}`;
     if (DASHBOARD_ROUTES[dashKey]) return DASHBOARD_ROUTES[dashKey](req, res, dashDeps);
 
-    // Serve dashboard.html at /dashboard
+    // Legacy redirect: the dashboard now lives as a tab in the main UI.
     if (u.pathname === '/dashboard' && req.method === 'GET') {
-      const dashFile = path.join(ROOT, 'ui', 'dashboard.html');
-      try {
-        const data = fs.readFileSync(dashFile);
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(data);
-      } catch {
-        return send(res, 404, 'dashboard.html not found');
-      }
+      res.writeHead(302, { Location: '/#dashboard' });
+      return res.end();
     }
 
     return serveStatic(req, res);
@@ -1121,8 +1405,7 @@ analytics.startSession();
 
 server.listen(PORT, HOST, () => {
   console.log(`\nProxy-Max running`);
-  console.log(`  UI:        http://${HOST}:${PORT}/`);
-  console.log(`  Dashboard: http://${HOST}:${PORT}/dashboard`);
+  console.log(`  UI:        http://${HOST}:${PORT}/  (dashboard, optimization & config all here)`);
   console.log(`  API base:  http://${HOST}:${PORT}  (point ANTHROPIC_BASE_URL here)`);
   console.log(`  Config:    ${CONFIG_PATH}`);
   console.log(`  Log file:  ${LOG_FILE}  (tail -f for live view)`);
