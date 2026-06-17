@@ -1201,6 +1201,27 @@
           <label class="switch"><input type="checkbox" id="opt_compression"><span class="slider"></span></label>
         </div>
 
+        <!-- Response Style (caveman mode) -->
+        <div class="opt-row" id="row_responseStyle">
+          <label class="switch"><input type="checkbox" id="opt_responseStyle"><span class="slider"></span></label>
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>
+              Response Style
+              <span class="opt-tag lossy">output</span>
+            </div>
+            <div class="opt-desc">Inject terse-communication rules so the model responds in compressed caveman-mode prose — ~75% fewer output tokens. Technical accuracy is unchanged; code/errors stay verbatim. Based on <a href="https://github.com/juliusbrussee/caveman" target="_blank">caveman</a>.</div>
+            <div class="opt-sub">
+              <label>Intensity</label>
+              <select id="opt_responseStyle_mode">
+                <option value="lite">Lite — drop filler only, keep full sentences</option>
+                <option value="full" selected>Full — classic caveman (default)</option>
+                <option value="ultra">Ultra — maximum compression</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <!-- Laziness Logic Injection -->
         <div class="opt-row" id="row_laziness">
           <div class="opt-main">
@@ -1922,6 +1943,7 @@ function wireOptToggles() {
     ['opt_toolResults','row_toolResults'], ['opt_leanContext','row_leanContext'],
     ['opt_history','row_history'], ['opt_toolCompress','row_toolCompress'],
     ['opt_compression','row_compression'], ['opt_laziness','row_laziness'],
+    ['opt_responseStyle','row_responseStyle'],
   ];
   for (const [cb, row] of pairs) {
     const el = $('#'+cb); const r = $('#'+row);
@@ -1961,6 +1983,12 @@ function applyOptimization(o) {
   $('#opt_tc_examples').checked  = tc.stripExamples !== false;
   $('#opt_compression').checked  = c.enabled === true;
   $('#opt_comp_mode').value      = c.mode || 'lite';
+  const rs = o.responseStyle || {};
+  if ($('#opt_responseStyle')) {
+    $('#opt_responseStyle').checked = rs.enabled !== false;
+    $('#opt_responseStyle_mode').value = rs.mode || 'full';
+    $('#row_responseStyle').classList.toggle('on', rs.enabled !== false);
+  }
   const pt = o.laziness || {};
   if ($('#opt_laziness')) {
     $('#opt_laziness').checked     = pt.enabled === true;
@@ -2005,6 +2033,10 @@ function gatherOptimization() {
     },
     compression:  { enabled: $('#opt_compression').checked, mode: $('#opt_comp_mode').value },
     laziness:     $('#opt_laziness') ? { enabled: $('#opt_laziness').checked, mode: $('#opt_laziness_mode').value } : undefined,
+    responseStyle: {
+      enabled: $('#opt_responseStyle') ? $('#opt_responseStyle').checked : true,
+      mode: $('#opt_responseStyle_mode') ? $('#opt_responseStyle_mode').value : 'full',
+    },
   };
 }
 

@@ -24,6 +24,7 @@ const CacheInjector    = require('./optimizers/cache-injector');
 const ToolResultFilter = require('./optimizers/tool-result-filter');
 const MiddleContextCompactor = require('./optimizers/lean-context');
 const LazinessOptimizer = require('./optimizers/laziness');
+const ResponseStyleOptimizer = require('./optimizers/response-style');
 
 const { SqliteStore }  = require('./cache/sqlite-store');
 const ResponseCache    = require('./cache/response-cache');
@@ -186,6 +187,7 @@ const cacheInjector  = new CacheInjector();
 const middleContextCompactor = new MiddleContextCompactor();
 const responseCache  = new ResponseCache(store);
 const lazinessOptimizer = new LazinessOptimizer();
+const responseStyleOptimizer = new ResponseStyleOptimizer();
 
 function statKeyForBypassReason(reason) {
   if (!reason) return null;
@@ -228,12 +230,13 @@ const dashDeps = { analytics, tokenCounter, pricingCalc, compressor };
 const DEFAULT_OPTIMIZATION = {
   cacheInject:   { enabled: true, ttl: '5m', minTokens: 256 },
   responseCache: { enabled: true, ttlMinutes: 60, includeStreaming: true, cacheWebSearch: false, maxBodyBytes: 2_000_000 },
-  toolResults:   { enabled: true, stripAnsi: true, stripBlankLines: false, dedupeLines: false, maxChars: 0 },
+  toolResults:   { enabled: true, stripAnsi: true, stripBlankLines: false, dedupeLines: false, maxChars: 0, smartFilter: true },
   historyTrim:   { enabled: true, maxMessages: 120, keepFirstN: 4, maxInputTokens: 80000 },
   toolCompress:  { enabled: false, maxDescLength: 800, stripExamples: false },
   leanContext:   { enabled: true, keepFirstN: 4, keepLastN: 24, minChars: 1200, summaryChars: 700, minSavingsTokens: 512 },
   compression:   { enabled: true, mode: 'lite' },
   laziness:      { enabled: true, mode: 'full' },
+  responseStyle: { enabled: true, mode: 'full' },
 };
 
 function getOptimization() {
@@ -249,6 +252,7 @@ function getOptimization() {
     cacheInject:   { ...DEFAULT_OPTIMIZATION.cacheInject,   ...(o.cacheInject   || {}) },
     responseCache: { ...DEFAULT_OPTIMIZATION.responseCache, ...(o.responseCache || {}) },
     laziness:      { ...DEFAULT_OPTIMIZATION.laziness,      ...(o.laziness      || {}) },
+    responseStyle: { ...DEFAULT_OPTIMIZATION.responseStyle, ...(o.responseStyle || {}) },
   };
 }
 
@@ -290,6 +294,7 @@ const OPT_STATS = {
   fanoutQueued: 0,
   fanoutQueueTimeouts: 0,
   fanoutMaxConcurrent: 0,
+  responseStyleInjections: 0,
 };
 
 // Restore cumulative OPT_STATS from previous runs; always reset startedAt to now.
@@ -990,6 +995,7 @@ async function handleMessages(req, res) {
       stripBlankLines: opt.toolResults.stripBlankLines,
       maxChars:        opt.toolResults.maxChars,
       dedupeLines:     opt.toolResults.dedupeLines,
+      smartFilter:     opt.toolResults.smartFilter !== false,
     });
     const r = trf.filterMessages(body.messages);
     if (r.savedChars > 0) {
@@ -1098,6 +1104,15 @@ async function handleMessages(req, res) {
     if (p.injected) {
       OPT_STATS.lazinessInjections = (OPT_STATS.lazinessInjections || 0) + 1;
       optApplied.push(`laziness:${p.mode}`);
+    }
+  }
+
+  // Stage 7 — Response Style (caveman mode) — terse output injection
+  if (opt.responseStyle && opt.responseStyle.enabled && !claudeCodeFastPath) {
+    const p = responseStyleOptimizer.inject(body, { mode: opt.responseStyle.mode });
+    if (p.injected) {
+      OPT_STATS.responseStyleInjections = (OPT_STATS.responseStyleInjections || 0) + 1;
+      optApplied.push(`response-style:${p.mode}`);
     }
   }
 
@@ -1510,6 +1525,10 @@ async function handleOptimizationPost(req, res) {
   next.responseCache.maxBodyBytes  = Math.max(1024, Number(next.responseCache.maxBodyBytes) || 2_000_000);
   next.responseCache.includeStreaming = next.responseCache.includeStreaming !== false;
   next.responseCache.cacheWebSearch = next.responseCache.cacheWebSearch === true;
+  if (next.responseStyle) {
+    next.responseStyle.enabled = next.responseStyle.enabled !== false;
+    if (!['lite','full','ultra'].includes(next.responseStyle.mode)) next.responseStyle.mode = 'full';
+  }
   CONFIG.optimization = next;
   delete CONFIG.compression;
   saveConfig(CONFIG);
