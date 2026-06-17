@@ -44,10 +44,10 @@ function readBody(req) {
 const DASHBOARD_ROUTES = {
 
   // === OVERVIEW TAB ===
-  'GET /api/dashboard/overview': async (req, res, { analytics }) => {
+  'GET /api/dashboard/overview': async (req, res, { analytics, pricingCalc }) => {
     try {
-      const sessionStats    = await analytics.getSessionStats();
-      const lifetimeStats   = await analytics.getLifetimeStats();
+      const sessionStats    = await analytics.getSessionStats(null, pricingCalc);
+      const lifetimeStats   = await analytics.getLifetimeStats(pricingCalc);
       const requestHistory  = await analytics.getRequestHistory(null, 10);
       jsonOk(res, {
         current_session: sessionStats,
@@ -61,14 +61,14 @@ const DASHBOARD_ROUTES = {
   },
 
   // === TOKEN USAGE TAB ===
-  'GET /api/dashboard/token-usage': async (req, res, { analytics }) => {
+  'GET /api/dashboard/token-usage': async (req, res, { analytics, pricingCalc }) => {
     try {
-      const modelBreakdown    = await analytics.getModelBreakdown();
+      const modelBreakdown    = await analytics.getModelBreakdown(null, pricingCalc);
       const compressionStats  = await analytics.getCompressionStats();
       const formatted = modelBreakdown.map(m => ({
         ...m,
-        reduction_pct: m.tokens_saved && m.original_tokens
-          ? ((m.tokens_saved / m.original_tokens) * 100).toFixed(1)
+        reduction_pct: m.tokens_saved && (m.total_context_input + m.total_output + m.tokens_saved)
+          ? ((m.tokens_saved / (m.total_context_input + m.total_output + m.tokens_saved)) * 100).toFixed(1)
           : '0',
       }));
       jsonOk(res, { by_model: formatted, by_compression_mode: compressionStats });
@@ -77,12 +77,28 @@ const DASHBOARD_ROUTES = {
     }
   },
 
+  'GET /api/dashboard/model-diagnostics': async (req, res, { analytics, pricingCalc }) => {
+    try {
+      const models = await analytics.getModelBreakdown(null, pricingCalc);
+      jsonOk(res, {
+        models: models.map(m => ({
+          ...m,
+          cost_usd: (m.total_cost_nano / 1e9).toFixed(6),
+          cost_formatted: pricingCalc.formatCost(m.total_cost_nano),
+        })),
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      jsonErr(res, 500, err.message);
+    }
+  },
+
   // === COST ANALYTICS TAB ===
   'GET /api/dashboard/cost-analytics': async (req, res, { analytics, pricingCalc }) => {
     try {
-      const providerBreakdown = await analytics.getProviderBreakdown();
-      const modelBreakdown    = await analytics.getModelBreakdown();
-      const lifetimeStats     = await analytics.getLifetimeStats();
+      const providerBreakdown = await analytics.getProviderBreakdown(null, pricingCalc);
+      const modelBreakdown    = await analytics.getModelBreakdown(null, pricingCalc);
+      const lifetimeStats     = await analytics.getLifetimeStats(pricingCalc);
       jsonOk(res, {
         by_provider: providerBreakdown.map(p => ({
           ...p,
@@ -98,7 +114,7 @@ const DASHBOARD_ROUTES = {
           total_cost_nano: lifetimeStats.total_cost_nano_usd || 0,
           total_cost_usd: ((lifetimeStats.total_cost_nano_usd || 0) / 1e9).toFixed(6),
           total_tokens_saved: lifetimeStats.total_tokens_saved || 0,
-          estimated_savings_usd: (((lifetimeStats.total_tokens_saved || 0) * 0.003) / 1e6).toFixed(6),
+          estimated_savings_usd: (((lifetimeStats.total_tokens_saved || 0) * 3.0) / 1e6).toFixed(6),
         },
       });
     } catch (err) {

@@ -6,45 +6,56 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
   :root {
-    --bg:#070910; --bg2:#0c0f17;
-    --panel:#10131c; --panel2:#161a25; --panel3:#1c2230;
-    --line:#222837; --line2:#2c3346;
-    --text:#e8eaf2; --mute:#8993ab; --dim:#5a6378;
-    --accent:#7aa2ff; --accent2:#b988ff; --accent3:#5ee0c1;
+    --bg:#f5f7fb; --bg2:#ffffff;
+    --panel:#ffffff; --panel2:#f8fafc; --panel3:#eef2f7;
+    --line:#e5e7eb; --line2:#d1d5db;
+    --text:#111827; --mute:#667085; --dim:#98a2b3;
+    --accent:#1877f2; --accent2:#405de6; --accent3:#10b981; --hot:#e1306c;
     --ok:#3ddc97; --warn:#ffb547; --err:#ff6b6b;
     --bedrock:#ff9900; --azure:#0078d4; --nvidia:#76b900;
+    --shadow:0 18px 45px rgba(15,23,42,.10);
+    --glass: none;
   }
   * { box-sizing: border-box; }
   html,body {
     margin:0; padding:0;
     background:
-      radial-gradient(1100px 700px at 12% -10%, rgba(122,162,255,.10), transparent 60%),
-      radial-gradient(900px 600px at 100% 0%, rgba(185,136,255,.08), transparent 55%),
-      var(--bg);
+      linear-gradient(180deg, #f8fafc 0%, #eef2ff 45%, #ffffff 100%);
     color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
     min-height:100vh;
   }
   a { color:var(--accent); text-decoration:none; }
   button { font:inherit; }
   svg { display:block; }
+  body::before {
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.26; z-index:-1;
+    background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(circle at 50% 20%, #000 0%, transparent 72%);
+  }
+  ::selection { background:rgba(143,178,255,.35); color:#fff; }
 
   /* ── Layout ── */
-  .app { display:grid; grid-template-columns: 244px 1fr; min-height:100vh; }
+  .app { display:grid; grid-template-columns: 280px 1fr; min-height:100vh; }
   aside {
     border-right:1px solid var(--line);
-    background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 100%);
-    padding: 16px 12px;
+    background:
+      radial-gradient(380px 260px at 45% -10%, rgba(143,178,255,.16), transparent 62%),
+      linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.025));
+    backdrop-filter: var(--glass);
+    padding: 18px 14px;
     position: sticky; top:0; height:100vh; overflow:auto;
     display:flex; flex-direction:column;
+    box-shadow: 18px 0 60px rgba(0,0,0,.18);
   }
 
   /* ── Brand ── */
   .brand { display:flex; align-items:center; gap:11px; padding:4px 6px 16px; border-bottom:1px solid var(--line); margin-bottom:10px; }
   .brand .logo {
-    width:34px; height:34px; border-radius:9px; flex-shrink:0;
-    background: conic-gradient(from 220deg at 50% 50%, var(--accent), var(--accent2), var(--accent3), var(--accent));
+    width:38px; height:38px; border-radius:13px; flex-shrink:0;
+    background: conic-gradient(from 220deg at 50% 50%, var(--accent), var(--accent2), var(--hot), var(--accent3), var(--accent));
     display:flex; align-items:center; justify-content:center;
-    box-shadow: 0 6px 18px rgba(122,162,255,.22);
+    box-shadow: 0 10px 28px rgba(143,178,255,.30), inset 0 0 18px rgba(255,255,255,.18);
   }
   .brand .logo svg { width:18px; height:18px; color:#0a0c12; }
   .brand .name { font-weight:700; font-size:14.5px; letter-spacing:.2px; line-height:1.2; }
@@ -54,12 +65,12 @@
   nav { display:flex; flex-direction:column; gap:2px; flex:1; }
   .nav-section { color:var(--dim); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; padding:13px 8px 5px; }
   .navitem {
-    display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px;
-    color:var(--mute); cursor:pointer; user-select:none; font-size:13.5px; font-weight:500;
-    border:1px solid transparent; transition:.12s;
+    display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:12px;
+    color:var(--mute); cursor:pointer; user-select:none; font-size:13.5px; font-weight:600;
+    border:1px solid transparent; transition:.16s ease;
   }
-  .navitem:hover { color:var(--text); background:rgba(255,255,255,.04); }
-  .navitem.active { color:var(--text); background:var(--panel2); border-color:var(--line2); }
+  .navitem:hover { color:var(--text); background:rgba(255,255,255,.055); transform:translateX(2px); }
+  .navitem.active { color:var(--text); background:linear-gradient(135deg, rgba(143,178,255,.22), rgba(94,224,193,.11)); border-color:rgba(143,178,255,.42); box-shadow:0 12px 32px rgba(143,178,255,.16), inset 0 1px 0 rgba(255,255,255,.08); }
   .navitem svg { width:17px; height:17px; flex-shrink:0; opacity:.75; }
   .navitem.active svg { opacity:1; color:var(--accent); }
 
@@ -77,14 +88,14 @@
   .health .value { font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   /* ── Main ── */
-  main { padding: 24px clamp(16px, 3.5vw, 40px) 80px; max-width: 1140px; }
-  h1 { font-size:21px; font-weight:700; margin:0 0 3px; letter-spacing:.1px; }
+  main { padding: 28px clamp(18px, 3.7vw, 46px) 86px; max-width: 1220px; }
+  h1 { font-size:24px; font-weight:800; margin:0 0 4px; letter-spacing:-.35px; }
   .sub { color:var(--mute); font-size:13px; margin-bottom:16px; line-height:1.5; }
   .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:16px; }
   .topbar .pills { display:flex; gap:6px; flex-wrap:wrap; padding-top:4px; }
 
   /* ── Pills ── */
-  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:var(--panel); border:1px solid var(--line); color:var(--mute); font-size:11.5px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:999px; background:rgba(255,255,255,.055); border:1px solid var(--line); color:var(--mute); font-size:11.5px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06); }
   .pill .dot { width:6px; height:6px; border-radius:50%; background:var(--mute); }
   .pill.ok   { color:var(--text); } .pill.ok   .dot { background:var(--ok);   }
   .pill.warn { color:var(--text); } .pill.warn .dot { background:var(--warn);  }
@@ -92,10 +103,16 @@
 
   /* ── Cards ── */
   .card {
-    background: linear-gradient(160deg, rgba(255,255,255,.022) 0%, rgba(255,255,255,0) 50%), var(--panel);
-    border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:14px;
-    transition: border-color .15s;
+    background:
+      linear-gradient(160deg, rgba(255,255,255,.095) 0%, rgba(255,255,255,.024) 58%),
+      radial-gradient(360px 180px at 0% 0%, rgba(143,178,255,.08), transparent 70%),
+      var(--panel);
+    border:1px solid var(--line); border-radius:22px; padding:22px; margin-bottom:18px;
+    transition: border-color .16s, transform .16s, box-shadow .16s;
+    box-shadow: 0 14px 42px rgba(0,0,0,.18);
+    backdrop-filter: var(--glass);
   }
+  .card:hover { border-color: rgba(122,162,255,.24); transform: translateY(-1px); }
   .card:focus-within { border-color: var(--line2); }
   .card h3 { margin:0 0 12px; font-size:13.5px; font-weight:600; letter-spacing:.15px; display:flex; align-items:center; gap:8px; }
   .card h3 svg { width:16px; height:16px; opacity:.7; }
@@ -134,8 +151,8 @@
   /* ── Forms ── */
   label { display:block; font-size:11px; color:var(--mute); margin:12px 0 5px; letter-spacing:.08em; text-transform:uppercase; font-weight:500; }
   input, select, textarea {
-    width:100%; background:var(--panel2); color:var(--text);
-    border:1px solid var(--line); border-radius:8px; padding:9px 11px; font:inherit; outline:none;
+    width:100%; background:rgba(8,12,24,.58); color:var(--text);
+    border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:inherit; outline:none;
     transition: border-color .12s, box-shadow .12s;
   }
   input:focus, select:focus, textarea:focus { border-color:var(--accent); box-shadow: 0 0 0 3px rgba(122,162,255,.12); }
@@ -146,13 +163,13 @@
   /* ── Buttons ── */
   .btn {
     display:inline-flex; align-items:center; gap:6px;
-    background:var(--accent); color:#0b0d12; border:0; border-radius:8px;
-    padding:9px 15px; font-weight:600; font-size:13.5px; cursor:pointer; transition:.12s;
-    white-space:nowrap;
+    background:linear-gradient(135deg, var(--accent), var(--accent3)); color:#07101b; border:0; border-radius:13px;
+    padding:10px 16px; font-weight:800; font-size:13.5px; cursor:pointer; transition:.14s ease;
+    white-space:nowrap; box-shadow:0 12px 30px rgba(143,178,255,.22), inset 0 1px 0 rgba(255,255,255,.35);
   }
   .btn svg { width:15px; height:15px; }
-  .btn:hover { filter:brightness(1.08); }
-  .btn.secondary { background:transparent; color:var(--text); border:1px solid var(--line2); }
+  .btn:hover { filter:brightness(1.08); transform:translateY(-1px); }
+  .btn.secondary { background:rgba(255,255,255,.03); color:var(--text); border:1px solid var(--line2); box-shadow:none; }
   .btn.secondary:hover { background:var(--panel2); border-color:var(--accent); }
   .btn.ghost { background:transparent; color:var(--mute); border:1px dashed var(--line); }
   .btn.ghost:hover { color:var(--text); }
@@ -293,15 +310,72 @@
   /* ── Dashboard stat cards ── */
   .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:6px; }
   .stat {
-    background: linear-gradient(160deg, rgba(255,255,255,.03) 0%, rgba(255,255,255,0) 60%), var(--panel);
-    border:1px solid var(--line); border-radius:14px; padding:16px;
+    background: radial-gradient(220px 120px at 20% 0%, rgba(122,162,255,.13), transparent 65%), linear-gradient(160deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.015) 60%), var(--panel);
+    border:1px solid var(--line); border-radius:22px; padding:19px;
+    box-shadow:0 15px 42px rgba(0,0,0,.18); transition:.16s ease;
   }
+  .stat:hover { transform:translateY(-2px); border-color:rgba(143,178,255,.28); }
   .stat .label { display:flex; align-items:center; gap:7px; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
   .stat .label svg { width:14px; height:14px; opacity:.7; }
   .stat .value { font-size:25px; font-weight:700; letter-spacing:-.5px; margin-top:8px; }
   .stat .value.accent { color:var(--accent3); }
   .stat .value.warn { color:var(--warn); }
   .stat .delta { font-size:11.5px; color:var(--mute); margin-top:3px; }
+  .savings-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:12px 0; }
+  .mini-metric { border:1px solid var(--line); border-radius:15px; padding:12px 13px; background:linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.018)), var(--panel2); }
+  .mini-metric .m-label { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
+  .mini-metric .m-value { font-size:18px; font-weight:700; margin-top:4px; }
+  .mini-metric .m-note { color:var(--mute); font-size:10.5px; margin-top:2px; }
+  .hero { display:grid; grid-template-columns:1.35fr .95fr; gap:14px; margin-bottom:14px; }
+  .hero-card {
+    position:relative; overflow:hidden; border:1px solid var(--line); border-radius:18px; padding:20px;
+    background:
+      radial-gradient(680px 320px at 0% 0%, rgba(143,178,255,.24), transparent 62%),
+      radial-gradient(560px 300px at 100% 0%, rgba(255,122,217,.12), transparent 56%),
+      radial-gradient(500px 280px at 70% 100%, rgba(94,224,193,.13), transparent 62%),
+      linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.012)), var(--panel);
+    box-shadow:0 22px 70px rgba(0,0,0,.32); backdrop-filter:var(--glass);
+  }
+  .hero-kicker { color:var(--accent3); font-size:11px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; }
+  .hero-title { font-size:34px; line-height:1.05; font-weight:900; margin:8px 0 10px; letter-spacing:-1px; text-wrap:balance; }
+  .hero-sub { color:var(--mute); max-width:720px; }
+  .hero-pills { display:flex; gap:7px; flex-wrap:wrap; margin-top:16px; }
+  .compat-grid { display:grid; gap:9px; }
+  .compat-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 13px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.035); }
+  .compat-row .l { color:var(--mute); font-size:12px; }
+  .compat-row .r { font-weight:700; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; text-align:right; }
+  .diag-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:12px; width:100%; min-width:0; }
+  .diag-card { border:1px solid var(--line); border-radius:12px; padding:12px; background:#fff; min-width:0; overflow:hidden; }
+  .diag-card.warn { border-color:rgba(255,181,71,.40); background:#fffaf0; }
+  .diag-card.ok { border-color:rgba(61,220,151,.35); background:#f4fff9; }
+  .diag-card.err { border-color:rgba(255,95,109,.38); background:#fff5f6; }
+  .diag-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; margin-bottom:10px; min-width:0; }
+  .diag-title { font-weight:700; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .diag-sub { color:var(--dim); font-size:11px; font-family:ui-monospace,Menlo,Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .diag-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(92px,1fr)); gap:8px; margin:10px 0; min-width:0; }
+  .diag-metric { border:1px solid var(--line); border-radius:9px; padding:8px; background:#f8fafc; min-width:0; overflow:hidden; }
+  .diag-metric .k { color:var(--dim); font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .diag-metric .v { font-weight:800; font-size:14px; margin-top:3px; font-family:ui-monospace,Menlo,Consolas,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .diag-tabs { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin:12px 0 14px; width:100%; }
+  .diag-tab { border:1px solid var(--line); background:#fff; color:var(--text); border-radius:12px; padding:9px 10px; font-size:12px; cursor:pointer; text-align:center; min-width:0; }
+  .diag-tab.active { background:#eaf2ff; border-color:#cfe0ff; color:#1877f2; font-weight:700; }
+  .diag-section { display:none; width:100%; min-width:0; }
+  .diag-section.active { display:block; }
+  .diag-wide { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr); gap:12px; width:100%; min-width:0; }
+  .diag-wide > .card, .diag-section .card { min-width:0; overflow:hidden; }
+  .diag-spark { display:flex; align-items:flex-end; gap:2px; height:42px; padding:7px 0; min-width:0; overflow:hidden; }
+  .diag-spark span { flex:1; min-width:2px; border-radius:3px 3px 0 0; background:linear-gradient(180deg,#1877f2,#84b7ff); }
+  .diag-log-row { border-bottom:1px solid var(--line); padding:9px 4px; cursor:pointer; min-width:0; overflow:hidden; }
+  .diag-log-row:hover { background:#f8fafc; }
+  .diag-trace { border:1px solid var(--line); border-radius:10px; padding:10px; background:#fff; margin-top:8px; min-width:0; overflow:hidden; }
+  .diag-chip { display:inline-flex; align-items:center; gap:4px; max-width:100%; padding:2px 7px; border-radius:999px; border:1px solid var(--line); font-size:10.5px; color:var(--dim); margin:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .trace-tree { margin-top:10px; border-left:2px solid #60a5fa; padding-left:12px; min-width:0; }
+  .trace-step { position:relative; margin:8px 0; padding:8px 10px; border:1px solid var(--line); border-radius:10px; min-width:0; overflow:hidden; background:#fff; }
+  .trace-step:before { content:""; position:absolute; left:-18px; top:14px; width:10px; height:10px; border-radius:50%; background:#60a5fa; }
+  [data-view="logs"] pre, [data-view="logs"] .cmd { max-width:100%; overflow:auto; white-space:pre-wrap; word-break:break-word; }
+  [data-view="logs"] .kv { min-width:0; }
+  [data-view="logs"] .kv .v { min-width:0; overflow:hidden; text-overflow:ellipsis; word-break:break-word; }
+  @media (max-width:980px) { .diag-wide { grid-template-columns:1fr; } }
 
   /* ── Data table ── */
   table.data { width:100%; border-collapse:collapse; font-size:13px; }
@@ -342,7 +416,11 @@
   .link-btn { color:var(--accent); cursor:pointer; text-decoration:underline; }
   kbd { background:var(--panel3); border:1px solid var(--line2); border-radius:4px; padding:1px 5px; font-size:11.5px; font-family:inherit; }
 
-  @media (max-width:980px) { .stats-grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:980px) { .stats-grid { grid-template-columns:repeat(2,1fr); } .hero { grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion:no-preference) {
+    .brand .logo { animation: glowPulse 4.5s ease-in-out infinite; }
+    @keyframes glowPulse { 0%,100% { filter:saturate(1); } 50% { filter:saturate(1.25) brightness(1.08); } }
+  }
   @media (max-width:860px) {
     .app { grid-template-columns: 1fr; }
     aside { position:relative; height:auto; border-right:0; border-bottom:1px solid var(--line); }
@@ -350,6 +428,100 @@
     .grid2 { grid-template-columns:1fr; }
     .stats-grid { grid-template-columns:1fr; }
   }
+
+  /* Final clean social-app theme overrides */
+  body { background:#f6f7f9 !important; color:#111827 !important; }
+  body::before { display:none !important; }
+  aside { background:#fff !important; box-shadow:none !important; backdrop-filter:none !important; }
+  .card, .stat, .hero-card, .mini-metric, .diag-card, .compat-row { background:#fff !important; box-shadow:none !important; backdrop-filter:none !important; min-width:0; }
+  main, .view, [data-view="logs"], .diag-section, .diag-wide, .diag-grid { max-width:100%; min-width:0; box-sizing:border-box; }
+  [data-view="logs"] { background:transparent !important; color:#111827 !important; padding:0 !important; border-radius:0 !important; overflow:hidden; }
+  .card:hover, .stat:hover, .btn:hover, .navitem:hover { transform:none !important; }
+  input, select, textarea { background:#fff !important; color:#111827 !important; border-color:#d0d5dd !important; }
+  .btn { background:#1877f2 !important; color:#fff !important; box-shadow:none !important; }
+  .btn.secondary { background:#fff !important; color:#111827 !important; }
+  .navitem.active { background:#eaf2ff !important; border-color:#cfe0ff !important; box-shadow:none !important; }
+  .brand .logo { background:#1877f2 !important; box-shadow:none !important; animation:none !important; }
+  .hero-title { color:#111827 !important; }
+  .pill { background:#f2f4f7 !important; box-shadow:none !important; }
+
+
+  /* Diagnostics observability studio */
+  [data-view="logs"] { overflow:visible !important; }
+  .diag-shell { display:grid; gap:18px; color:#101828; }
+  .diag-hero {
+    position:relative; overflow:hidden; border:1px solid rgba(24,119,242,.18); border-radius:30px; padding:24px;
+    background:
+      radial-gradient(720px 320px at 0% 0%, rgba(24,119,242,.22), transparent 62%),
+      radial-gradient(560px 280px at 92% 8%, rgba(20,184,166,.20), transparent 58%),
+      radial-gradient(480px 240px at 72% 120%, rgba(124,58,237,.12), transparent 60%),
+      linear-gradient(135deg,#ffffff 0%,#f7fbff 55%,#eef6ff 100%) !important;
+    box-shadow:0 24px 80px rgba(16,24,40,.12) !important;
+  }
+  .diag-hero:after { content:""; position:absolute; inset:auto -12% -48% 38%; height:230px; background:radial-gradient(circle, rgba(24,119,242,.14), transparent 68%); transform:rotate(-7deg); pointer-events:none; }
+  .diag-hero-main { position:relative; z-index:1; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:22px; align-items:start; }
+  .diag-kicker { display:inline-flex; align-items:center; gap:9px; color:#0f62fe; font-size:11px; letter-spacing:.15em; text-transform:uppercase; font-weight:900; }
+  .diag-kicker:before { content:""; width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 6px rgba(61,220,151,.18); }
+  .diag-hero h1 { font-size:36px; line-height:1.04; letter-spacing:-1px; margin:8px 0 8px; }
+  .diag-hero .sub { max-width:820px; margin:0; color:#475467; font-size:14px; }
+  .diag-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .diag-status-strip { position:relative; z-index:1; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:22px; }
+  .diag-status-card { position:relative; border:1px solid rgba(24,119,242,.13); border-radius:20px; padding:14px 15px; background:rgba(255,255,255,.78) !important; box-shadow:0 12px 32px rgba(16,24,40,.07) !important; min-width:0; overflow:hidden; }
+  .diag-status-card:before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:#1877f2; opacity:.85; }
+  .diag-status-card.ok:before { background:var(--ok); }.diag-status-card.warn:before { background:var(--warn); }.diag-status-card.err:before { background:var(--err); }
+  .diag-status-card .label { color:#667085; font-size:10px; text-transform:uppercase; letter-spacing:.11em; font-weight:900; }
+  .diag-status-card .value { margin-top:4px; font:900 25px/1.1 ui-monospace,Menlo,Consolas,monospace; letter-spacing:-.8px; color:#101828; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .diag-status-card .hint { margin-top:4px; color:#667085; font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .diag-toolbar { display:grid; grid-template-columns:minmax(280px,1.2fr) repeat(3,minmax(145px,.55fr)); gap:10px; align-items:center; padding:12px; border:1px solid var(--line); border-radius:22px; background:#fff; box-shadow:0 10px 34px rgba(16,24,40,.05); }
+  .diag-toolbar input { grid-column:auto; }
+  .diag-toolbar input, .diag-toolbar select { height:42px; border-radius:14px !important; }
+  .diag-nav-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .diag-tabs { display:flex; gap:8px; padding:6px; border:1px solid var(--line); border-radius:18px; background:#fff !important; overflow:auto; margin:0 !important; box-shadow:0 8px 28px rgba(16,24,40,.04); }
+  .diag-tab { flex:0 0 auto; border:0 !important; background:transparent !important; color:#667085 !important; border-radius:13px !important; padding:10px 13px !important; font-weight:900; white-space:nowrap; }
+  .diag-tab.active { background:#1877f2 !important; color:#fff !important; box-shadow:0 8px 22px rgba(24,119,242,.24) !important; }
+  .diag-card, .diag-panel-card { border:1px solid var(--line); border-radius:22px; background:#fff !important; box-shadow:0 12px 38px rgba(16,24,40,.065) !important; padding:16px; min-width:0; overflow:hidden; }
+  .diag-panel-card h3 { margin-top:0; display:flex; align-items:center; gap:8px; }
+  .diag-card.warn, .diag-panel-card.warn { border-color:#fedf89 !important; background:#fffcf5 !important; }
+  .diag-card.ok, .diag-panel-card.ok { border-color:#abefc6 !important; background:#f6fef9 !important; }
+  .diag-card.err, .diag-panel-card.err { border-color:#fecdca !important; background:#fffafa !important; }
+  .diag-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:12px; }
+  .diag-workbench { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(330px,.65fr); gap:14px; align-items:start; }
+  .diag-terminal-card { padding:0 !important; background:#060a11 !important; border-color:#111827 !important; color:#d1fbe8 !important; box-shadow:0 22px 70px rgba(2,6,23,.26) !important; }
+  .diag-terminal-card .small { color:#94a3b8 !important; }
+  .terminal-top { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 15px; border-bottom:1px solid rgba(255,255,255,.09); background:linear-gradient(180deg,#151b26,#0a0f18); }
+  .terminal-lights { display:flex; gap:6px; align-items:center; }
+  .terminal-lights i { width:10px; height:10px; border-radius:50%; display:block; }
+  .terminal-lights i:nth-child(1){background:#ff5f57}.terminal-lights i:nth-child(2){background:#ffbd2e}.terminal-lights i:nth-child(3){background:#28c840}
+  .terminal-title { color:#98a2b3; font:800 11px ui-monospace,Menlo,Consolas,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .diag-terminal { height:min(68vh,720px); min-height:560px; overflow:auto; padding:8px 0; font:12px/1.55 ui-monospace,Menlo,Consolas,monospace; background:#060a11; }
+  .terminal-row { display:grid; grid-template-columns:86px 72px minmax(120px,1fr) 74px; gap:10px; padding:8px 15px; border-bottom:1px solid rgba(255,255,255,.045); color:#cbd5e1; cursor:pointer; }
+  .terminal-row:hover { background:rgba(255,255,255,.05); }
+  .terminal-row.active { background:rgba(24,119,242,.18); box-shadow:inset 3px 0 0 #60a5fa; }
+  .terminal-row .time { color:#64748b; }
+  .terminal-row .sev { font-weight:900; text-transform:uppercase; }
+  .terminal-row.info .sev { color:#60a5fa; }.terminal-row.warn .sev { color:#fbbf24; }.terminal-row.error .sev { color:#fb7185; }
+  .terminal-row .msg { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .terminal-row .dur { text-align:right; color:#94a3b8; }
+  .diag-side-stack { display:grid; gap:14px; }
+  .capture-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .capture-box { border:1px solid var(--line); border-radius:16px; background:#f8fafc; overflow:hidden; min-width:0; }
+  .capture-head { display:flex; justify-content:space-between; gap:8px; padding:9px 11px; border-bottom:1px solid var(--line); color:#475467; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+  .capture-box pre { margin:0; padding:12px; max-height:300px; overflow:auto; background:#f8fafc; color:#111827; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
+  .diag-model-list { display:grid; gap:10px; max-height:650px; overflow:auto; padding-right:2px; }
+  .model-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; border:1px solid var(--line); border-radius:18px; padding:13px; background:#fff; cursor:pointer; transition:.16s ease; }
+  .model-row:hover { border-color:#bcd5ff; background:#f8fbff; transform:translateY(-1px); }
+  .model-row.active { border-color:#1877f2; box-shadow:0 0 0 3px rgba(24,119,242,.10); }
+  .model-name { font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .model-meta { color:#667085; font-size:11.5px; font-family:ui-monospace,Menlo,Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mini-stats { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  .mini-chip { border:1px solid var(--line); background:#f8fafc; color:#475467; border-radius:999px; padding:3px 8px; font-size:10.5px; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .severity-toggle { display:inline-flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:15px; background:#fff; box-shadow:0 8px 28px rgba(16,24,40,.04); }
+  .severity-toggle button { border:0; background:transparent; border-radius:11px; padding:8px 11px; cursor:pointer; font-weight:900; color:#667085; font-size:11px; }
+  .severity-toggle button.active { color:#fff; background:#111827; }
+  .diag-wide { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .diag-path { font-size:11px; color:var(--dim); font-family:ui-monospace,Menlo,Consolas,monospace; word-break:break-all; padding:0 2px; }
+  @media (max-width:1180px) { .diag-workbench, .diag-hero-main { grid-template-columns:1fr; } .diag-actions { justify-content:flex-start; } .diag-toolbar { grid-template-columns:1fr 1fr; } }
+  @media (max-width:760px) { .diag-status-strip, .capture-grid, .diag-toolbar { grid-template-columns:1fr; } .terminal-row { grid-template-columns:70px 58px minmax(0,1fr); } .terminal-row .dur { display:none; } }
 </style>
 </head>
 <body>
@@ -433,6 +605,28 @@
         </div>
       </div>
 
+      <div class="hero" id="dashboardHero">
+        <div class="hero-card">
+          <div class="hero-kicker">Claude Code compatibility layer</div>
+          <div class="hero-title">Fast-safe routing for any upstream model.</div>
+          <div class="hero-sub">Proxy-Max now keeps Anthropic tool transcripts valid, bypasses risky replay cache during live Claude Code tool streams, and exposes latency + cache health in one place.</div>
+          <div class="hero-pills">
+            <span class="pill ok"><span class="dot"></span><span id="heroCompat">tool loops protected</span></span>
+            <span class="pill"><span class="dot"></span><span id="heroPreset">preset: —</span></span>
+            <span class="pill"><span class="dot"></span><span id="heroLatency">latency: —</span></span>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <h3>Live readiness <span class="badge" id="heroReadyBadge">checking</span></h3>
+          <div class="compat-grid" id="heroReadiness">
+            <div class="compat-row"><span class="l">Provider</span><span class="r">—</span></div>
+            <div class="compat-row"><span class="l">Model</span><span class="r">—</span></div>
+            <div class="compat-row"><span class="l">Cache safety</span><span class="r">—</span></div>
+            <div class="compat-row"><span class="l">Last error</span><span class="r">—</span></div>
+          </div>
+        </div>
+      </div>
+
       <div class="stats-grid">
         <div class="stat">
           <div class="label">Requests routed</div>
@@ -450,10 +644,17 @@
           <div class="delta" id="dashSpendDelta">vs. unoptimized</div>
         </div>
         <div class="stat">
-          <div class="label">Cache hit rate</div>
+          <div class="label">Response cache hit rate</div>
           <div class="value" id="dashCacheHitRate">—</div>
           <div class="delta" id="dashCacheHitsDelta">response cache</div>
         </div>
+      </div>
+
+      <div class="savings-strip" id="dashSavingsStrip">
+        <div class="mini-metric"><div class="m-label">Optimizer saved</div><div class="m-value" id="saveOptimizerTokens">—</div><div class="m-note">trim + compress</div></div>
+        <div class="mini-metric"><div class="m-label">Replay avoided</div><div class="m-value" id="saveReplayTokens">—</div><div class="m-note">response cache</div></div>
+        <div class="mini-metric"><div class="m-label">Prompt-cache read</div><div class="m-value" id="savePromptRead">—</div><div class="m-note">provider reported</div></div>
+        <div class="mini-metric"><div class="m-label">Cache entries</div><div class="m-value" id="saveCacheEntries">—</div><div class="m-note" id="saveCacheMode">local store</div></div>
       </div>
 
       <div class="grid2">
@@ -501,6 +702,13 @@
             Spend by provider
           </h3>
           <div id="dashCostTable"><div class="small mute">No data yet.</div></div>
+        </div>
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17V9"/><path d="M13 17V7"/><path d="M18 17v-4"/></svg>
+            Latency &amp; pool health
+          </h3>
+          <div id="dashLatency" class="compat-grid"><div class="small mute">Loading…</div></div>
         </div>
         <div class="card">
           <h3>
@@ -760,7 +968,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6a9 3 0 0 0 18 0V5"/><path d="M3 11v6a9 3 0 0 0 18 0v-6"/></svg>
               Response cache <span class="opt-tag safe">lossless · SQLite</span>
             </div>
-            <div class="opt-desc">Stores each upstream response in a local SQLite database keyed by the exact request. An identical request replays the stored response verbatim (streaming included) at zero upstream cost. Lossless — it only avoids re-asking the same question.</div>
+            <div class="opt-desc">Stores each upstream response in a local SQLite database keyed by the exact request. An identical request replays the stored response verbatim (streaming included) at zero upstream cost. For Claude Code turns, only exact retries/replays hit; normal conversational turns are usually unique.</div>
             <div class="opt-sub">
               <label>Time-to-live (minutes) <span class="small">(0 = never expire)</span></label>
               <input id="opt_rc_ttl" type="number" min="0" step="5" placeholder="60" style="max-width:200px" />
@@ -774,12 +982,13 @@
           <div class="opt-main">
             <div class="opt-title">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-              Tool-result filtering <span class="opt-tag safe">lossless (ANSI only)</span>
+              Tool-result filtering <span class="opt-tag safe">fast context diet</span>
             </div>
-            <div class="opt-desc">Strips ANSI colour/escape codes from terminal output before it re-enters context each turn. Escape codes are display-only, so this is content-preserving. The two extra sub-options below <em>are</em> lossy — leave them off for zero-risk operation.</div>
+            <div class="opt-desc">Cleans terminal output before it re-enters context each turn: ANSI removal is lossless, while blank-line collapse, adjacent duplicate-line collapse, and truncation reduce noisy logs/test output.</div>
             <div class="opt-sub">
               <label class="opt-check"><input type="checkbox" id="opt_tr_ansi"> Strip ANSI / colour escape codes <span class="opt-tag safe" style="margin-left:4px">lossless</span></label>
               <label class="opt-check"><input type="checkbox" id="opt_tr_blank"> Collapse repeated blank lines <span class="opt-tag lossy" style="margin-left:4px">lossy</span></label>
+              <label class="opt-check"><input type="checkbox" id="opt_tr_dedupe"> Collapse adjacent duplicate log lines <span class="opt-tag lossy" style="margin-left:4px">lossy</span></label>
               <label style="margin-top:10px">Max characters per tool result <span class="small">(0 = no truncation)</span></label>
               <input id="opt_tr_maxChars" type="number" min="0" step="1000" placeholder="0" style="max-width:200px" />
               <div class="small warn" style="margin-top:6px">Truncation can cut off command output or file contents — keep at 0 unless you accept that risk.</div>
@@ -823,6 +1032,24 @@
           <label class="switch"><input type="checkbox" id="opt_toolCompress"><span class="slider"></span></label>
         </div>
 
+        <!-- Middle context compaction -->
+        <div class="opt-row" id="row_leanContext">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M4 15h10"/><path d="M4 11h16"/><path d="M4 7h10"/><path d="M17 5l3 3-3 3"/></svg>
+              Middle context compaction <span class="opt-tag lossy">conservative</span>
+            </div>
+            <div class="opt-desc">Compacts older plain-text middle turns into local summaries while preserving system prompts, tool schemas, tool_use/tool_result pairs, and newest turns exactly. This reduces long-session payloads without triggering Claude Code's common tool-call transcript errors.</div>
+            <div class="opt-sub">
+              <div class="grid2">
+                <div><label>Keep last N turns exact</label><input id="opt_lean_keepLast" type="number" min="2" step="2" placeholder="24" /></div>
+                <div><label>Summary characters</label><input id="opt_lean_summary" type="number" min="120" step="50" placeholder="700" /></div>
+              </div>
+            </div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_leanContext"><span class="slider"></span></label>
+        </div>
+
         <!-- Prose compression -->
         <div class="opt-row" id="row_compression">
           <div class="opt-main">
@@ -844,6 +1071,26 @@
             </div>
           </div>
           <label class="switch"><input type="checkbox" id="opt_compression"><span class="slider"></span></label>
+        </div>
+
+        <!-- Laziness Logic Injection -->
+        <div class="opt-row" id="row_laziness">
+          <div class="opt-main">
+            <div class="opt-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Laziness directive injection <span class="opt-tag safe">behavioural tuning</span>
+            </div>
+            <div class="opt-desc">Injects extreme laziness directives into the system prompt to prevent the model from writing unnecessary code, preferring standard libraries, deletion, and minimal diffs.</div>
+            <div class="opt-sub">
+              <label>Laziness intensity</label>
+              <select id="opt_laziness_mode" style="max-width:260px">
+                <option value="lite">Lite — gentle reminders</option>
+                <option value="full">Full — standard YAGNI enforcement</option>
+                <option value="extreme">Extreme — hostile to writing new code</option>
+              </select>
+            </div>
+          </div>
+          <label class="switch"><input type="checkbox" id="opt_laziness"><span class="slider"></span></label>
         </div>
 
         <div class="actions">
@@ -943,32 +1190,92 @@
 
     <!-- ══ DIAGNOSTICS VIEW ══ -->
     <section class="view" data-view="logs">
-      <div class="topbar">
-        <div><h1>Diagnostics</h1><div class="sub">Request log — every routed call, its attempts and timings.</div></div>
-      </div>
-
-      <div class="card">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <h3 style="margin:0;flex:1">Request log</h3>
-          <span id="logCount" class="small" style="color:var(--dim)"></span>
-          <button class="btn secondary sm" onclick="loadLogs()">Refresh</button>
-          <a class="btn secondary sm" href="/api/logs/file?lines=2000" target="_blank" download="requests.log">Download</a>
-          <button class="btn danger sm" onclick="clearLogs()">Clear</button>
+      <div class="diag-shell">
+        <div class="diag-hero">
+          <div class="diag-hero-main">
+            <div>
+              <div class="diag-kicker">Observability cockpit</div>
+              <h1>Diagnostics</h1>
+              <div class="sub">Monitor proxy health, per-model routing, severity-tagged logs, request traces, and captured inputs/outputs from one fast operational workspace.</div>
+            </div>
+            <div class="diag-actions">
+              <button class="btn secondary sm" onclick="loadDiagnostics()">Refresh</button>
+              <button class="btn secondary sm" onclick="toggleDiagLive()" id="diagLiveBtn">Live tail: off</button>
+              <a class="btn secondary sm" href="/api/logs/file?lines=2000" target="_blank" download="requests.log">Download logs</a>
+              <button class="btn danger sm" onclick="clearLogs()">Clear</button>
+            </div>
+          </div>
+          <div class="diag-status-strip" id="diagOverviewStats"></div>
         </div>
-        <div id="logFilePath" style="font-size:11px;color:var(--dim);font-family:ui-monospace,Menlo,Consolas,monospace;margin-bottom:10px;word-break:break-all"></div>
-        <div id="logTable" style="overflow-x:auto"><div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div></div>
-      </div>
 
-      <div class="card">
-        <h3>API endpoints</h3>
-        <div class="kv">
-          <span class="k">Health</span><span class="v"><a href="/api/health" target="_blank">/api/health</a></span>
-          <span class="k">Optimization</span><span class="v"><a href="/api/optimization" target="_blank">/api/optimization</a></span>
-          <span class="k">Opt stats</span><span class="v"><a href="/api/optimization/stats" target="_blank">/api/optimization/stats</a></span>
-          <span class="k">Analytics</span><span class="v"><a href="/api/dashboard/overview" target="_blank">/api/dashboard/overview</a></span>
-          <span class="k">Config</span><span class="v"><a href="/api/config" target="_blank">/api/config</a> <span class="small">(secrets masked)</span></span>
-          <span class="k">Request logs</span><span class="v"><a href="/api/logs" target="_blank">/api/logs</a></span>
+        <div class="diag-toolbar">
+          <input id="diagLogFilter" placeholder="Search logs, model, provider, trace ID, error, captured text..." oninput="renderDiagnosticsWorkspace()">
+          <select id="diagModelFilter" onchange="renderDiagnosticsWorkspace()"><option value="">All models</option></select>
+          <select id="diagProviderFilter" onchange="renderDiagnosticsWorkspace()"><option value="">All providers</option></select>
+          <select id="diagLogLimit" onchange="loadDiagnostics()"><option value="100">100 lines</option><option value="300" selected>300 lines</option><option value="800">800 lines</option><option value="1000">1000 lines</option></select>
         </div>
+
+        <div class="diag-nav-row">
+          <div class="diag-tabs" id="diagTabs">
+            <button class="diag-tab active" data-diag-section="overview">Live console</button>
+            <button class="diag-tab" data-diag-section="models">Models</button>
+            <button class="diag-tab" data-diag-section="traces">Requests & traces</button>
+            <button class="diag-tab" data-diag-section="logs">Log explorer</button>
+            <button class="diag-tab" data-diag-section="metrics">Metrics</button>
+            <button class="diag-tab" data-diag-section="errors">Errors & alerts</button>
+            <button class="diag-tab" data-diag-section="performance">Performance</button>
+            <button class="diag-tab" data-diag-section="cost">Token & cost</button>
+            <button class="diag-tab" data-diag-section="system">System</button>
+          </div>
+          <div class="severity-toggle" id="diagSeverityToggle">
+            <button class="active" data-severity="all">All</button>
+            <button data-severity="error">Error</button>
+            <button data-severity="warn">Warn</button>
+            <button data-severity="info">Info</button>
+          </div>
+        </div>
+        <div id="logFilePath" class="diag-path"></div>
+
+        <section class="diag-section active" data-diag-panel="overview">
+          <div class="diag-workbench">
+            <div class="diag-panel-card diag-terminal-card">
+              <div class="terminal-top"><div style="display:flex;align-items:center;gap:10px"><span class="terminal-lights"><i></i><i></i><i></i></span><span class="terminal-title">request stream</span></div><span id="logCount" class="terminal-title">0 entries</span></div>
+              <div id="logTable" class="diag-terminal"><div class="small" style="color:#64748b;padding:14px">No requests logged yet.</div></div>
+            </div>
+            <div class="diag-side-stack">
+              <div class="diag-panel-card"><h3>Health snapshot</h3><div class="kv" id="diagHealth"></div></div>
+              <div class="diag-panel-card"><h3>Selected capture</h3><div id="diagCaptureDetail" class="small mute">Select a log row to inspect input and output captures.</div></div>
+              <div class="diag-panel-card"><h3>Traffic &amp; latency</h3><div id="diagTraffic"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="diag-section" data-diag-panel="models">
+          <div class="diag-wide">
+            <div class="diag-panel-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h3 style="margin:0;flex:1">Per-model selection</h3><span id="modelDiagCount" class="small" style="color:var(--dim)"></span></div><div id="modelDiagCards" class="diag-model-list"><div class="small mute">No model diagnostics yet — run a request through the proxy.</div></div></div>
+            <div class="diag-panel-card"><h3>Selected model telemetry</h3><div id="diagModelDetail" class="small mute">Pick a model to view provider, cost, token, cache, latency, and error detail.</div></div>
+          </div>
+        </section>
+
+        <section class="diag-section" data-diag-panel="traces">
+          <div class="diag-wide">
+            <div class="diag-panel-card"><h3>Request traces</h3><div id="diagTraceList" style="max-height:640px;overflow:auto"></div></div>
+            <div class="diag-panel-card"><h3>Selected trace</h3><div id="diagTraceDetail" class="small mute">Select a request to inspect attempts, fan-out, payload summary, timings, and errors.</div></div>
+          </div>
+        </section>
+
+        <section class="diag-section" data-diag-panel="logs">
+          <div class="diag-panel-card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h3 style="margin:0;flex:1">Full log explorer</h3><span id="diagExplorerCount" class="small" style="color:var(--dim)"></span></div>
+            <div id="diagExplorerTable"><div class="small mute">No requests logged yet.</div></div>
+          </div>
+        </section>
+
+        <section class="diag-section" data-diag-panel="metrics"><div class="diag-wide"><div class="diag-panel-card"><h3>Metrics explorer</h3><div class="kv" id="diagMetrics"></div></div><div class="diag-panel-card"><h3>Status/model/provider breakdown</h3><div id="diagMetricBreakdown"></div></div></div></section>
+        <section class="diag-section" data-diag-panel="errors"><div class="diag-wide"><div class="diag-panel-card"><h3>Error history</h3><div id="diagErrors"></div></div><div class="diag-panel-card"><h3>Alerts & rules</h3><div id="diagAlerts"></div></div></div></section>
+        <section class="diag-section" data-diag-panel="performance"><div class="diag-wide"><div class="diag-panel-card"><h3>Latency distribution</h3><div id="diagPerf"></div></div><div class="diag-panel-card"><h3>Fan-out / cache performance</h3><div class="kv" id="diagFanout"></div></div></div></section>
+        <section class="diag-section" data-diag-panel="cost"><div class="diag-wide"><div class="diag-panel-card"><h3>Token & cost summary</h3><div class="kv" id="diagCost"></div></div><div class="diag-panel-card"><h3>Provider spend</h3><div id="diagProviderCost"></div></div></div></section>
+        <section class="diag-section" data-diag-panel="system"><div class="diag-wide"><div class="diag-panel-card"><h3>Runtime health</h3><div class="kv" id="diagSystem"></div></div><div class="diag-panel-card"><h3>Diagnostics endpoints</h3><div class="kv"><span class="k">Unified diagnostics</span><span class="v"><a href="/api/diagnostics" target="_blank">/api/diagnostics</a></span><span class="k">Model diagnostics</span><span class="v"><a href="/api/dashboard/model-diagnostics" target="_blank">/api/dashboard/model-diagnostics</a></span><span class="k">Logs</span><span class="v"><a href="/api/logs/file?lines=2000" target="_blank">/api/logs/file</a></span><span class="k">Health</span><span class="v"><a href="/api/health" target="_blank">/api/health</a></span></div></div></div></section>
       </div>
     </section>
 
@@ -1116,14 +1423,14 @@ function navTo(view) {
   // per-view loaders
   if (view === 'system') refreshSystem();
   if (view === 'models') renderModelsBrowser();
-  if (view === 'logs')   loadLogs();
+  if (view === 'logs')   loadDiagnostics();
   if (view === 'launch') renderLaunchPage();
   if (view === 'optimization') loadOptimization();
 
   clearInterval(_poolTimer); _poolTimer = null;
   clearInterval(_dashTimer); _dashTimer = null;
-  if (view === 'pool') { loadPool(); _poolTimer = setInterval(loadPool, 5000); }
-  if (view === 'dashboard') { loadDashboard(); _dashTimer = setInterval(loadDashboard, 6000); }
+  if (view === 'pool') { loadPool(); _poolTimer = setInterval(loadPool, 60000); }
+  if (view === 'dashboard') { loadDashboard(); _dashTimer = setInterval(loadDashboard, 60000); }
 }
 document.addEventListener('click', e => {
   const ni = e.target.closest('.navitem'); if (ni) navTo(ni.dataset.view);
@@ -1156,6 +1463,25 @@ function escapeHtml(s) {
 function fmtNum(n) { n = Number(n)||0; return n.toLocaleString(); }
 function fmtUsd(n) { n = Number(n)||0; return '$' + (n < 0.01 ? n.toFixed(6) : n.toFixed(4)); }
 
+async function apiGet(path, timeoutMs = 12000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(path, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+    const text = await r.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; }
+    catch (e) {
+      const preview = text ? ` — ${text.slice(0, 180).replace(/\s+/g, ' ')}` : '';
+      return { ok: false, status: r.status, raw: text, error: `Bad JSON from ${path}${preview}` };
+    }
+    if (!r.ok) return { ok: false, status: r.status, data, error: data.error || `HTTP ${r.status}` };
+    return { ok: true, status: r.status, data };
+  } catch (e) {
+    return { ok: false, status: 0, error: e.name === 'AbortError' ? `Timeout loading ${path}` : e.message };
+  } finally { clearTimeout(t); }
+}
+
 // ── Bootstrap ──
 async function loadAll() {
   const [m, c, h, l] = await Promise.all([
@@ -1182,58 +1508,96 @@ window.addEventListener('hashchange', () => navTo(location.hash.slice(1)));
 
 // ════════════════════ DASHBOARD ════════════════════
 async function loadDashboard() {
-  try {
-    const [stats, overview, cost, tokens] = await Promise.all([
-      fetch('/api/optimization/stats').then(r=>r.json()).catch(()=>({})),
-      fetch('/api/dashboard/overview').then(r=>r.json()).catch(()=>({})),
-      fetch('/api/dashboard/cost-analytics').then(r=>r.json()).catch(()=>({})),
-      fetch('/api/dashboard/token-usage').then(r=>r.json()).catch(()=>({})),
-    ]);
-    renderDashboard(stats, overview, cost, tokens);
-  } catch (e) { /* keep last render */ }
+  const results = await Promise.all([
+    apiGet('/api/optimization/stats'),
+    apiGet('/api/dashboard/overview'),
+    apiGet('/api/dashboard/cost-analytics'),
+    apiGet('/api/dashboard/token-usage'),
+    apiGet('/api/dashboard/summary'),
+  ]);
+  const [statsR, overviewR, costR, tokensR, summaryR] = results;
+  const errors = results
+    .map((r, i) => r.ok ? null : `${['stats','overview','cost','tokens','summary'][i]}: ${r.error}`)
+    .filter(Boolean);
+  renderDashboard(statsR.data || {}, overviewR.data || {}, costR.data || {}, tokensR.data || {}, errors, summaryR.data || {});
 }
 
-function renderDashboard(stats, overview, cost, tokens) {
+function renderDashboard(stats, overview, cost, tokens, errors = [], summary = {}) {
   const sess = overview.current_session || {};
   const life = overview.lifetime || {};
+  renderDashboardHero(summary, stats, errors);
   $('#dashRequests').textContent = fmtNum(sess.total_requests || 0);
   $('#dashRequestsDelta').textContent = `${fmtNum(life.total_requests || 0)} lifetime`;
   $('#dashTokensSaved').textContent = fmtNum(stats.estTokensSaved || life.total_tokens_saved || 0);
   $('#dashCostSaved').textContent = fmtUsd(stats.estCostSavedUsd || 0);
 
   const cache = stats.cache || {};
-  $('#dashCacheHitRate').textContent = `${Math.round((cache.hitRate || 0) * 100)}%`;
-  $('#dashCacheHitsDelta').textContent = `${fmtNum(stats.responseCacheHits || 0)} hits / ${fmtNum(stats.responseCacheMisses || 0)} miss`;
+  const responseCache = stats.responseCache || cache || {};
+  const promptCache = stats.promptCache || {};
+  const leanContext = stats.leanContext || {};
+  const hitRate = responseCache.hitRate ?? cache.hitRate ?? 0;
+  $('#dashCacheHitRate').textContent = `${Math.round(hitRate * 100)}%`;
+  $('#dashCacheHitsDelta').textContent = `${fmtNum(responseCache.hits ?? stats.responseCacheHits ?? 0)} exact hits / ${fmtNum(responseCache.misses ?? stats.responseCacheMisses ?? 0)} exact miss`;
 
   const spent = (life.total_cost_nano_usd || 0) / 1e9;
-  $('#dashSpendDelta').textContent = `${fmtUsd(spent)} spent lifetime`;
+  const estimatedUsage = (overview.recent_requests || []).some(r => r.upstream && r.upstream.usageEstimated);
+  $('#dashSpendDelta').textContent = `${fmtUsd(spent)} spent lifetime${estimatedUsage ? ' (some estimated)' : ''}`;
+
+  $('#saveOptimizerTokens').textContent = fmtNum(stats.estTokensSaved || life.total_tokens_saved || 0);
+  $('#saveReplayTokens').textContent = fmtNum(responseCache.tokensSaved ?? stats.responseCacheTokensSaved ?? 0);
+  $('#savePromptRead').textContent = fmtNum(promptCache.readTokens || 0);
+  $('#saveCacheEntries').textContent = fmtNum(responseCache.entries ?? cache.entries ?? 0);
+  $('#saveCacheMode').textContent = `${stats.storeBackend || 'store'} · ${responseCache.includeStreaming === false ? 'JSON only' : 'streams cached'}${estimatedUsage ? ' · estimates on zero-usage responses' : ''}`;
 
   // Store backend pill
   const storePill = $('#dashStorePill');
   if (storePill) {
     const be = stats.storeBackend || '—';
     storePill.innerHTML = `<span class="dot" style="background:${be==='sqlite'?'var(--ok)':'var(--warn)'}"></span>store: ${escapeHtml(be)}`;
+    storePill.title = `Last refresh: ${new Date().toLocaleTimeString()}${errors.length ? ' • ' + errors.join(' • ') : ''}`;
   }
+  if (errors.length) console.warn('[dashboard]', errors.join('; '));
 
-  // Token usage (Anthropic-style): lifetime totals
+  // Token usage. Anthropic prompt-cache usage separates uncached input from
+  // cache reads/writes; total context input is their sum.
+  const contextInput = life.total_context_input_tokens || ((life.total_input_tokens || 0) + (life.total_cache_read_input_tokens || 0) + (life.total_cache_creation_input_tokens || 0));
+  const billableInput = life.total_billable_input_tokens || contextInput;
   $('#dashUsage').innerHTML = [
-    ['Input tokens',  fmtNum(life.total_input_tokens || 0)],
+    ['Uncached input',  fmtNum(life.total_input_tokens || 0)],
+    ['Prompt-cache read', fmtNum(life.total_cache_read_input_tokens || promptCache.readTokens || 0)],
+    ['Prompt-cache write', fmtNum(life.total_cache_creation_input_tokens || promptCache.creationTokens || 0)],
+    ['Total context input', fmtNum(contextInput)],
+    ['Billable input units', fmtNum(billableInput)],
     ['Output tokens', fmtNum(life.total_output_tokens || 0)],
-    ['Total tokens',  fmtNum((life.total_input_tokens || 0) + (life.total_output_tokens || 0))],
-    ['Cached tokens served', fmtNum(cache.cachedTokens || 0)],
-    ['Total spend',   fmtUsd(spent)],
+    ['Total tokens',  fmtNum(contextInput + (life.total_output_tokens || 0))],
+    ['Response-cache inventory', fmtNum(cache.cachedTokens || 0)],
+    ['Total spend',   `${fmtUsd(spent)}${estimatedUsage ? ' *' : ''}`],
     ['Sessions',      fmtNum(life.total_sessions || 0)],
   ].map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
 
   // Response cache detail
-  $('#dashCache').innerHTML = [
-    ['Hits',            fmtNum(stats.responseCacheHits || 0)],
-    ['Misses',          fmtNum(stats.responseCacheMisses || 0)],
-    ['Hit rate',        `${Math.round((cache.hitRate || 0) * 100)}%`],
-    ['Entries stored',  fmtNum(cache.entries || 0)],
-    ['Tokens served from cache', fmtNum(stats.responseCacheTokensSaved || 0)],
-    ['Cost avoided',    fmtUsd((stats.responseCacheCostSavedNano || 0) / 1e9)],
-  ].map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
+  const cacheRows = [
+    ['Exact replay hits', fmtNum(responseCache.hits ?? stats.responseCacheHits ?? 0)],
+    ['Misses', fmtNum(responseCache.misses ?? stats.responseCacheMisses ?? 0)],
+    ['Hit rate', `${Math.round(hitRate * 100)}%`],
+    ['Entries stored', fmtNum(responseCache.entries ?? cache.entries ?? 0)],
+    ['Bypassed', fmtNum(responseCache.bypassed ?? stats.responseCacheBypassed ?? 0)],
+    ['Too large to store', fmtNum(responseCache.tooLarge ?? stats.responseCacheTooLarge ?? 0)],
+    ['Tokens avoided', fmtNum(responseCache.tokensSaved ?? stats.responseCacheTokensSaved ?? 0)],
+    ['Stored inventory tokens', fmtNum(responseCache.storedUnservedTokens || 0)],
+    ['Cost avoided by replay', fmtUsd(((responseCache.costSavedNano ?? stats.responseCacheCostSavedNano) || 0) / 1e9)],
+    ['Response-cache TTL', responseCache.ttlLabel || ((responseCache.ttlMinutes ?? 0) === 0 ? 'Never expires' : `${fmtNum(responseCache.ttlMinutes ?? 0)} min`)],
+    ['Mode', `${responseCache.includeStreaming === false ? 'non-stream only' : 'stream + JSON'}${responseCache.cacheWebSearch ? ' · web-search on' : ''}`],
+    ['Bypass reasons', (() => { const r = responseCache.bypassReasons || {}; const parts = Object.entries(r).filter(([,v]) => v).map(([k,v]) => `${k}:${fmtNum(v)}`); return parts.length ? parts.join(' · ') : '—'; })()],
+    ['Prompt-cache reads', fmtNum(promptCache.readTokens || 0)],
+    ['Prompt-cache writes', fmtNum(promptCache.creationTokens || 0)],
+    ['Middle context compacted', `${fmtNum(leanContext.turnsCompacted || 0)} turns / ~${fmtNum(leanContext.tokensSavedEstimate || 0)} tok`],
+    ['Breakpoints injected', fmtNum(promptCache.breakpointsInjected || 0)],
+    ['Breakpoints stripped', fmtNum(promptCache.breakpointsStripped || promptCache.unsupportedStripped || 0)],
+    ['Prompt-cache est. savings', fmtUsd((promptCache.savingsNano || 0) / 1e9)],
+  ];
+  $('#dashCache').innerHTML = cacheRows.map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')
+    + `<div class="small mute" style="grid-column:1/-1;margin-top:8px">Response cache only hits exact duplicate requests. Provider prompt-cache metrics come from Anthropic/Bedrock usage fields when reported.</div>`;
 
   // Optimization activity breakdown
   const rows = [
@@ -1244,6 +1608,7 @@ function renderDashboard(stats, overview, cost, tokens) {
     ['Tool-def chars saved',     fmtNum(stats.toolDescCharsSaved || 0)],
     ['Prose chars saved',        fmtNum(stats.proseCharsSaved || 0)],
     ['Cache breakpoints injected', fmtNum(stats.cacheBreakpointsInjected || 0)],
+    ['Claude Code fast-path', fmtNum(stats.claudeCodeFastPathRequests || 0)],
   ];
   $('#optActivity').innerHTML = rows.map(([k,v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
   const anyActive = (stats.requests || 0) > 0;
@@ -1289,6 +1654,8 @@ function renderDashboard(stats, overview, cost, tokens) {
     $('#dashCostTable').innerHTML = '<div class="small mute">No data yet.</div>';
   }
 
+  renderLatency(summary);
+
   // recent
   const recent = overview.recent_requests || [];
   if (recent.length) {
@@ -1305,6 +1672,43 @@ function renderDashboard(stats, overview, cost, tokens) {
   }
 }
 
+function renderDashboardHero(summary, stats, errors = []) {
+  const active = summary.active || {};
+  const cc = summary.claudeCode || {};
+  const latency = summary.latency || {};
+  const cache = summary.cache || {};
+  const ok = !errors.length && cc.status !== 'watch';
+  $('#heroPreset').textContent = 'preset: ' + (summary.optimization?.preset || 'balanced');
+  $('#heroLatency').textContent = `p95: ${fmtNum(latency.p95Ms || 0)} ms`;
+  $('#heroCompat').textContent = ok ? 'tool loops protected' : 'needs attention';
+  const badge = $('#heroReadyBadge');
+  badge.textContent = ok ? 'ready' : 'watch';
+  badge.className = 'badge ' + (ok ? 'ok' : 'warn');
+  const lastErr = cc.lastError?.error ? cc.lastError.error.slice(0, 90) : 'none';
+  $('#heroReadiness').innerHTML = [
+    ['Provider', active.provider || 'not set'],
+    ['Model', active.model || 'not set'],
+    ['Cache safety', `${fmtNum(cache.entries || 0)} exact entries · ${fmtNum(cc.fastPathRequests || stats.claudeCodeFastPathRequests || 0)} fast-path`],
+    ['Last error', lastErr],
+  ].map(([k,v], i) => `<div class="compat-row ${i===3 && lastErr !== 'none' ? 'warn' : ''}"><span class="l">${escapeHtml(k)}</span><span class="r">${escapeHtml(v)}</span></div>`).join('');
+}
+
+function renderLatency(summary) {
+  const latency = summary.latency || {};
+  const pool = summary.pool || [];
+  const rows = [
+    ['Latest request', `${fmtNum(latency.latestMs || 0)} ms`],
+    ['P50 latency', `${fmtNum(latency.p50Ms || 0)} ms`],
+    ['P95 latency', `${fmtNum(latency.p95Ms || 0)} ms`],
+    ['Pool members', fmtNum(pool.length || 0)],
+  ];
+  const fanout = summary.fanout || {};
+  rows.push(['Fan-out load', `${fmtNum(fanout.inFlight || 0)} / ${fmtNum(fanout.capacity || 0)}`]);
+  rows.push(['Queued / timeouts', `${fmtNum(fanout.queuedTotal || 0)} / ${fmtNum(fanout.queueTimeouts || 0)}`]);
+  const poolRows = (fanout.members || pool).slice(0, 4).map(p => `<div class="compat-row"><span class="l">${escapeHtml(p.label || p.provider)} · ${escapeHtml(p.model || 'model')}</span><span class="r">${fmtNum(p.inFlight || 0)}/${fmtNum(p.capacity || 0)} live · ${fmtNum(p.lastMs || 0)}ms</span></div>`).join('');
+  $('#dashLatency').innerHTML = rows.map(([k,v]) => `<div class="compat-row"><span class="l">${k}</span><span class="r">${v}</span></div>`).join('') + poolRows;
+}
+
 async function clearCache() {
   try { await fetch('/api/cache/clear', { method:'POST' }); toast('Response cache cleared'); loadDashboard(); }
   catch (e) { toast(e.message, false); }
@@ -1314,9 +1718,9 @@ async function clearCache() {
 function wireOptToggles() {
   const pairs = [
     ['opt_cache','row_cache'], ['opt_responseCache','row_responseCache'],
-    ['opt_toolResults','row_toolResults'],
+    ['opt_toolResults','row_toolResults'], ['opt_leanContext','row_leanContext'],
     ['opt_history','row_history'], ['opt_toolCompress','row_toolCompress'],
-    ['opt_compression','row_compression'],
+    ['opt_compression','row_compression'], ['opt_laziness','row_laziness'],
   ];
   for (const [cb, row] of pairs) {
     const el = $('#'+cb); const r = $('#'+row);
@@ -1336,14 +1740,18 @@ async function loadOptimization() {
 }
 
 function applyOptimization(o) {
-  const c = o.compression || {}, tr = o.toolResults || {}, h = o.historyTrim || {}, tc = o.toolCompress || {}, ci = o.cacheInject || {}, rc = o.responseCache || {};
+  const c = o.compression || {}, tr = o.toolResults || {}, h = o.historyTrim || {}, tc = o.toolCompress || {}, lc = o.leanContext || {}, ci = o.cacheInject || {}, rc = o.responseCache || {};
   $('#opt_cache').checked       = ci.enabled !== false;
   $('#opt_responseCache').checked = rc.enabled !== false;
   $('#opt_rc_ttl').value        = rc.ttlMinutes ?? 60;
   $('#opt_toolResults').checked = tr.enabled !== false;
   $('#opt_tr_ansi').checked      = tr.stripAnsi !== false;
   $('#opt_tr_blank').checked     = tr.stripBlankLines === true;
-  $('#opt_tr_maxChars').value    = tr.maxChars ?? 30000;
+  $('#opt_tr_dedupe').checked    = tr.dedupeLines === true;
+  $('#opt_tr_maxChars').value    = tr.maxChars ?? 12000;
+  $('#opt_leanContext').checked  = lc.enabled !== false;
+  $('#opt_lean_keepLast').value  = lc.keepLastN ?? 24;
+  $('#opt_lean_summary').value   = lc.summaryChars ?? 700;
   $('#opt_history').checked      = h.enabled === true;
   $('#opt_hist_max').value       = h.maxMessages ?? 60;
   $('#opt_hist_keep').value      = h.keepFirstN ?? 2;
@@ -1352,13 +1760,20 @@ function applyOptimization(o) {
   $('#opt_tc_examples').checked  = tc.stripExamples !== false;
   $('#opt_compression').checked  = c.enabled === true;
   $('#opt_comp_mode').value      = c.mode || 'lite';
+  const pt = o.laziness || {};
+  if ($('#opt_laziness')) {
+    $('#opt_laziness').checked     = pt.enabled === true;
+    $('#opt_laziness_mode').value  = pt.mode || 'full';
+  }
   // sync sub-panel visibility
   $('#row_cache').classList.toggle('on', $('#opt_cache').checked);
   $('#row_responseCache').classList.toggle('on', $('#opt_responseCache').checked);
   $('#row_toolResults').classList.toggle('on', $('#opt_toolResults').checked);
+  $('#row_leanContext').classList.toggle('on', $('#opt_leanContext').checked);
   $('#row_history').classList.toggle('on', $('#opt_history').checked);
   $('#row_toolCompress').classList.toggle('on', $('#opt_toolCompress').checked);
   $('#row_compression').classList.toggle('on', $('#opt_compression').checked);
+  if ($('#row_laziness')) $('#row_laziness').classList.toggle('on', $('#opt_laziness').checked);
 }
 
 function gatherOptimization() {
@@ -1369,6 +1784,7 @@ function gatherOptimization() {
       enabled: $('#opt_toolResults').checked,
       stripAnsi: $('#opt_tr_ansi').checked,
       stripBlankLines: $('#opt_tr_blank').checked,
+      dedupeLines: $('#opt_tr_dedupe').checked,
       maxChars: Number($('#opt_tr_maxChars').value || 0),
     },
     historyTrim:  {
@@ -1381,7 +1797,13 @@ function gatherOptimization() {
       maxDescLength: Number($('#opt_tc_maxlen').value || 400),
       stripExamples: $('#opt_tc_examples').checked,
     },
+    leanContext: {
+      enabled: $('#opt_leanContext').checked,
+      keepLastN: Number($('#opt_lean_keepLast').value || 24),
+      summaryChars: Number($('#opt_lean_summary').value || 700),
+    },
     compression:  { enabled: $('#opt_compression').checked, mode: $('#opt_comp_mode').value },
+    laziness:     $('#opt_laziness') ? { enabled: $('#opt_laziness').checked, mode: $('#opt_laziness_mode').value } : undefined,
   };
 }
 
@@ -1406,6 +1828,7 @@ function renderOptStats(stats) {
     ['Est. tokens saved',        fmtNum(stats.estTokensSaved || 0)],
     ['Est. cost saved',          fmtUsd(stats.estCostSavedUsd || 0)],
     ['Total characters saved',   fmtNum(stats.totalCharsSaved || 0)],
+    ['Middle context compacted', `${fmtNum(stats.leanContextTurnsCompacted || 0)} turns`],
     ['Cache breakpoints injected', fmtNum(stats.cacheBreakpointsInjected || 0)],
     ['Response-cache hits',      `${fmtNum(stats.responseCacheHits || 0)} (${Math.round((cache.hitRate||0)*100)}%)`],
     ['Cache cost avoided',       fmtUsd((stats.responseCacheCostSavedNano || 0) / 1e9)],
@@ -1749,40 +2172,252 @@ async function removeFromPool(idx) {
 }
 async function resetCircuits() { try { await fetch('/api/pool/reset-circuits', { method: 'POST' }); toast('Circuit breakers reset — all models active'); await loadPool(); } catch (e) { toast(e.message, false); } }
 
-// ── Request Log ──
-async function loadLogs() {
+// ── Diagnostics / Request Log ──
+let _diagnosticsData = null;
+let _selectedTrace = null;
+let _selectedLogId = null;
+let _selectedModel = null;
+let _diagSeverity = 'all';
+let _diagLiveTimer = null;
+async function loadDiagnostics() {
   try {
-    const data = await fetch('/api/logs/file?lines=200').then(r => r.json());
-    const pathEl = $('#logFilePath');
-    if (pathEl && data.logFile) { const files = (data.logFiles || []).map(f => `${f.name} (${(f.bytes/1024).toFixed(0)} KB)`).join('  ·  '); pathEl.textContent = `Log: ${data.logFile}${files ? '   —   ' + files : ''}`; }
-    renderLogs(data.logs || [], data.total || 0);
-  } catch {}
+    const limit = $('#diagLogLimit')?.value || '300';
+    const r = await apiGet(`/api/diagnostics?lines=${encodeURIComponent(limit)}`, 20000);
+    if (!r.ok) throw new Error(r.error || 'diagnostics failed');
+    _diagnosticsData = r.data;
+    renderDiagnosticsWorkspace();
+  } catch (e) {
+    renderModelDiagnostics([], new Map(), e.message);
+    const root = $('#diagOverviewStats'); if (root) root.innerHTML = `<div class="diag-card warn">Diagnostics failed: ${escapeHtml(e.message)}</div>`;
+  }
 }
+function renderDiagnosticsWorkspace() {
+  const d = _diagnosticsData || {};
+  const runtime = new Map(((d.metrics?.fanout?.members || [])).map(m => [m.model, m]));
+  updateDiagFilterOptions(d);
+  renderModelDiagnostics(d.models || [], runtime);
+  renderDiagnosticsOverview(d);
+  renderDiagnosticsTraces(d);
+  renderDiagnosticsLogs();
+  renderDiagnosticsMetrics(d);
+  renderDiagnosticsErrors(d);
+  renderDiagnosticsAlerts(d);
+  renderDiagnosticsPerformance(d);
+  renderDiagnosticsCost(d);
+  renderDiagnosticsSystem(d);
+}
+async function loadModelDiagnostics() { await loadDiagnostics(); }
+function logSeverity(e) {
+  const s = e?.finalStatus || e?.status || '';
+  if (['all-failed','mid-stream-err','queued-timeout','err','error','failed'].includes(s)) return 'error';
+  if (s === 'ok' || s === 'cache-hit' || s === 'success') return 'info';
+  return 'warn';
+}
+function logModel(e) { return e?.model || e?.request?.model || e?.attempts?.find(a => a && a.model)?.model || 'unknown'; }
+function logProvider(e) { return e?.provider || e?.attempts?.find(a => a && a.provider)?.provider || 'unknown'; }
+function logLine(e) {
+  const status = e?.finalStatus || e?.status || '?';
+  const model = logModel(e), provider = logProvider(e);
+  const label = e?.label || e?.request?.lastMessagePreview || e?.attempts?.[0]?.label || model || '?';
+  const caps = [e?.request?.inputCapture?.length ? 'input' : '', e?.responseCapture ? 'output' : '', e?.stream ? 'stream' : '', e?.hasTools || e?.request?.toolCount ? 'tools' : ''].filter(Boolean).join('+');
+  return `${status} · ${provider} · ${model} · ${label}${caps ? ' · ' + caps : ''}`;
+}
+function filteredDiagLogs() {
+  const d = _diagnosticsData || {};
+  const q = ($('#diagLogFilter')?.value || '').toLowerCase();
+  const model = $('#diagModelFilter')?.value || '';
+  const provider = $('#diagProviderFilter')?.value || '';
+  return (d.requests || []).filter(e => {
+    if (_diagSeverity !== 'all' && logSeverity(e) !== _diagSeverity) return false;
+    if (model && logModel(e) !== model) return false;
+    if (provider && logProvider(e) !== provider) return false;
+    return !q || JSON.stringify(e).toLowerCase().includes(q);
+  });
+}
+function updateDiagFilterOptions(d) {
+  const logs = d.requests || [];
+  const modelEl = $('#diagModelFilter'), providerEl = $('#diagProviderFilter');
+  const fill = (el, values, label) => {
+    if (!el) return;
+    const current = el.value;
+    const opts = [...new Set(values.filter(Boolean).filter(v => v !== 'unknown'))].sort();
+    el.innerHTML = `<option value="">All ${label}</option>` + opts.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if (opts.includes(current)) el.value = current;
+  };
+  fill(modelEl, [...logs.map(logModel), ...(d.models || []).map(m => m.model)], 'models');
+  fill(providerEl, [...logs.map(logProvider), ...(d.models || []).map(m => m.provider)], 'providers');
+}
+function renderDiagnosticsOverview(d) {
+  const o = d.overview || {}, h = d.health || {}, m = d.metrics || {};
+  const errorPct = Math.round((o.errorRate || 0) * 100);
+  const stats = [
+    ['Requests', fmtNum(o.totalRequests || 0), `${fmtNum(o.recentRequests1h || 0)} in last hour`, 'ok'],
+    ['Error rate', `${errorPct}%`, `${fmtNum(o.failuresLoaded || 0)} failures loaded`, errorPct >= 5 ? 'err' : (errorPct ? 'warn' : 'ok')],
+    ['P95 latency', `${fmtNum(o.p95Ms || 0)}ms`, `p50 ${fmtNum(o.p50Ms || 0)}ms · max ${fmtNum(o.maxMs || 0)}ms`, (o.p95Ms || 0) > 60000 ? 'warn' : 'ok'],
+    ['Health', h.status || 'unknown', `${fmtNum(h.inFlight || 0)} in flight · ${fmtNum(h.poolSize || 0)} pool`, h.ok === false || h.status === 'watch' ? 'warn' : 'ok'],
+  ];
+  $('#diagOverviewStats').innerHTML = stats.map(([k,v,n,cls]) => `<div class="diag-status-card ${cls}"><div class="label">${escapeHtml(k)}</div><div class="value">${escapeHtml(v)}</div><div class="hint">${escapeHtml(n)}</div></div>`).join('');
+  $('#diagTraffic').innerHTML = `<div class="diag-spark">${sparkBars(m.latencies || [])}</div><div class="kv"><span class="k">By status</span><span class="v">${escapeHtml(entriesLine(m.byStatus))}</span><span class="k">By provider</span><span class="v">${escapeHtml(entriesLine(m.byProvider))}</span><span class="k">Models</span><span class="v">${escapeHtml(entriesLine(m.byModel))}</span><span class="k">Slowest loaded</span><span class="v">${fmtNum(o.maxMs || 0)} ms</span></div>`;
+  $('#diagHealth').innerHTML = kvHtml([['Status', h.status || 'unknown'], ['Provider', h.provider || 'not set'], ['Pool size', fmtNum(h.poolSize || 0)], ['In flight', fmtNum(h.inFlight || 0)], ['Cache backend', h.cacheBackend || '—'], ['CPU load', `${h.cpu?.loadPct ?? 0}%`], ['Memory RSS', fmtBytes(h.memory?.rss || 0)], ['Uptime', `${fmtNum(h.uptimeSec || 0)}s`]]);
+}
+function sparkBars(values) {
+  const nums = (values || []).slice(-48).map(Number).filter(Number.isFinite);
+  if (!nums.length) return '<span style="height:2px"></span>';
+  const max = Math.max(...nums, 1);
+  return nums.map(n => `<span title="${fmtNum(n)}ms" style="height:${Math.max(3, Math.round((n/max)*40))}px"></span>`).join('');
+}
+function entriesLine(obj) { return Object.entries(obj || {}).map(([k,v]) => `${k}:${fmtNum(v)}`).join(' · ') || '—'; }
+function kvHtml(rows) { return rows.map(([k,v]) => `<span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(String(v ?? '—'))}</span>`).join(''); }
+function renderModelDiagnostics(models, runtime, error = null) {
+  const root = $('#modelDiagCards');
+  const cnt = $('#modelDiagCount');
+  if (!root) return;
+  if (cnt) cnt.textContent = error ? 'diagnostics unavailable' : `${models.length} model${models.length === 1 ? '' : 's'}`;
+  if (error) { root.innerHTML = `<div class="diag-card warn"><strong>Diagnostics endpoint failed</strong><div class="small mute" style="margin-top:6px">${escapeHtml(error)}</div></div>`; return; }
+  if (!models.length) { root.innerHTML = '<div class="small mute">No model diagnostics yet — run a request through the proxy.</div>'; renderModelDetail(null, runtime); return; }
+  if (!_selectedModel || !models.some(m => m.model === _selectedModel)) _selectedModel = models[0].model;
+  root.innerHTML = models.map(m => {
+    const live = runtime.get(m.model) || {};
+    const errRate = Math.round((m.error_rate || live.errorRate || 0) * 100);
+    const cacheRate = Math.round((m.cache_hit_rate || 0) * 100);
+    const cls = errRate >= 20 || live.cooldownSecsLeft ? 'err' : (errRate > 0 ? 'warn' : 'ok');
+    const status = live.cooldownSecsLeft ? `cooldown ${live.cooldownSecsLeft}s` : (errRate ? `${errRate}% errors` : 'healthy');
+    return `<div class="model-row ${_selectedModel === m.model ? 'active' : ''}" onclick="selectDiagModel('${escapeHtml(m.model)}')">
+      <div style="min-width:0"><div class="model-name">${escapeHtml(m.model)}</div><div class="model-meta">${escapeHtml(m.provider || live.provider || 'unknown')} · ${escapeHtml(m.category || live.category || 'model')}</div>
+        <div class="mini-stats"><span class="mini-chip">${fmtNum(m.request_count || live.req || 0)} req</span><span class="mini-chip">${fmtNum(m.avg_response_time_ms || 0)}ms avg</span><span class="mini-chip">${cacheRate}% cache</span><span class="mini-chip">${fmtNum(m.total_output || 0)} out</span></div></div>
+      <span class="badge ${cls === 'ok' ? 'ok' : 'warn'}">${escapeHtml(status)}</span>
+    </div>`;
+  }).join('');
+  renderModelDetail(models.find(m => m.model === _selectedModel), runtime);
+}
+function selectDiagModel(model) { _selectedModel = model; renderDiagnosticsWorkspace(); }
+function renderModelDetail(m, runtime) {
+  const el = $('#diagModelDetail');
+  if (!el) return;
+  if (!m) { el.innerHTML = '<div class="small mute">Pick a model to view provider, cost, token, cache, latency, and error detail.</div>'; return; }
+  const live = runtime.get(m.model) || {};
+  const errRate = Math.round((m.error_rate || live.errorRate || 0) * 100);
+  const cacheRate = Math.round((m.cache_hit_rate || 0) * 100);
+  const modes = Object.entries(m.compression_modes || {}).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v]) => `${k}:${fmtNum(v)}`).join(' · ') || 'none';
+  el.innerHTML = `<div class="diag-card ${errRate ? 'warn' : 'ok'}"><div class="diag-head"><div style="min-width:0"><div class="diag-title">${escapeHtml(m.model)}</div><div class="diag-sub">${escapeHtml(m.provider || live.provider || 'unknown')}</div></div><span class="badge ${errRate ? 'warn' : 'ok'}">${errRate ? errRate + '% errors' : 'healthy'}</span></div><div class="diag-metrics"><div class="diag-metric"><div class="k">Requests</div><div class="v">${fmtNum(m.request_count || live.req || 0)}</div></div><div class="diag-metric"><div class="k">Latest</div><div class="v">${fmtNum(m.latest_response_time_ms || live.lastMs || 0)}ms</div></div><div class="diag-metric"><div class="k">Cost</div><div class="v">${escapeHtml(m.cost_formatted || '$0')}</div></div><div class="diag-metric"><div class="k">Cache hit</div><div class="v">${cacheRate}%</div></div></div><div class="kv" style="margin-top:10px">${kvHtml([['Errors', `${fmtNum(m.error_count || live.err || 0)} (${errRate}%)`], ['Min / max latency', `${fmtNum(m.min_response_time_ms || 0)} / ${fmtNum(m.max_response_time_ms || 0)} ms`], ['Input tokens', fmtNum(m.total_context_input || 0)], ['Output tokens', fmtNum(m.total_output || 0)], ['Tokens saved', fmtNum(m.tokens_saved || 0)], ['Live load', `${fmtNum(live.inFlight || 0)} / ${fmtNum(live.capacity || 0)}`], ['Optimizers', modes]])}</div></div>`;
+}
+function renderDiagnosticsTraces(d) {
+  const visibleIds = new Set(filteredDiagLogs().map(e => String(e.id)));
+  const traces = (d.traces || []).filter(t => visibleIds.has(String(t.id)));
+  const el = $('#diagTraceList');
+  if (!el) return;
+  if (!traces.length) { el.innerHTML = '<div class="small mute">No request traces yet.</div>'; return; }
+  el.innerHTML = traces.map(t => `<div class="diag-log-row" onclick="selectDiagTrace('${escapeHtml(t.id || '')}')"><div style="display:flex;gap:8px;align-items:baseline"><strong style="color:${statusColor(t.status)}">${escapeHtml(t.status || '?')}</strong><span class="mono small">${escapeHtml(t.id || '?')}</span><span style="margin-left:auto" class="small mono">${fmtNum(t.totalMs || 0)}ms</span></div><div class="small mute">${escapeHtml(t.request?.model || t.attempts?.[0]?.model || 'unknown')} · ${(t.attempts||[]).length} attempt(s)</div></div>`).join('');
+  if (!_selectedTrace && traces[0]) selectDiagTrace(traces[0].id);
+}
+function selectDiagTrace(id) {
+  _selectedTrace = id;
+  const t = (_diagnosticsData?.traces || []).find(x => String(x.id) === String(id));
+  const el = $('#diagTraceDetail');
+  if (!el || !t) return;
+  const attempts = (t.attempts || []).map((a, i) => `<div class="trace-step"><strong>${i + 1}. ${escapeHtml(a.label || a.model || '?')}</strong> <span class="diag-chip">${escapeHtml(a.provider || '?')}</span> <span class="diag-chip">${escapeHtml(a.status || '?')}</span> <span class="diag-chip">${fmtNum(a.durationMs || 0)}ms</span>${a.error ? `<div class="small" style="color:var(--err);margin-top:6px">${escapeHtml(a.error)}</div>` : ''}</div>`).join('') || '<div class="small mute">No attempts recorded.</div>';
+  const pipeline = `<div class="trace-tree"><div class="trace-step"><strong>Ingress</strong><span class="diag-chip">${t.request?.messageCount ?? 0} messages</span><span class="diag-chip">${t.request?.toolCount ?? 0} tools</span></div><div class="trace-step"><strong>Router / fan-out</strong><span class="diag-chip">capacity ${fmtNum(t.fanout?.capacity || 0)}</span></div>${attempts}<div class="trace-step"><strong>Egress</strong><span class="diag-chip">${escapeHtml(t.status || '?')}</span><span class="diag-chip">${fmtNum(t.totalMs || 0)}ms</span></div></div>`;
+  const input = [t.request?.systemPreview ? `system: ${t.request.systemPreview}` : '', ...(t.request?.inputCapture || []).map(m => `${m.role}: ${m.preview}`)].filter(Boolean).join('\n\n') || JSON.stringify(t.request || {}, null, 2);
+  const output = t.responseCapture || t.attempts?.find(a => a.responsePreview)?.responsePreview || t.error?.message || t.attempts?.find(a => a.error)?.error || 'No output preview captured.';
+  el.innerHTML = `<div class="kv">${kvHtml([['ID', t.id || '—'], ['Status', t.status || '—'], ['Total', `${fmtNum(t.totalMs || 0)}ms`], ['Time', t.time || '—'], ['Messages', t.request?.messageCount ?? '—'], ['Tools', t.request?.toolCount ?? '—'], ['Stream', t.request?.stream ? 'yes' : 'no']])}</div><h4>Pipeline trace tree</h4>${pipeline}<h4>Input / output capture</h4><div class="capture-grid"><div class="capture-box"><div class="capture-head"><span>Input</span><span>${fmtNum(t.request?.messageCount || 0)} msg</span></div><pre>${escapeHtml(input)}</pre></div><div class="capture-box"><div class="capture-head"><span>Output</span><span>${escapeHtml(t.status || '?')}</span></div><pre>${escapeHtml(output)}</pre></div></div>`;
+}
+function renderDiagnosticsLogs() {
+  const data = _diagnosticsData || {};
+  const filtered = filteredDiagLogs();
+  const pathEl = $('#logFilePath');
+  if (pathEl && data.logs?.logFile) { const files = (data.logs.logFiles || []).map(f => `${f.name} (${(f.bytes/1024).toFixed(0)} KB)`).join('  ·  '); pathEl.textContent = `Log: ${data.logs.logFile}${files ? '   —   ' + files : ''}`; }
+  renderLogs(filtered, data.logs?.total || filtered.length);
+  renderLogExplorer(filtered);
+  if (!_selectedLogId || !filtered.some(e => String(e.id) === String(_selectedLogId))) _selectedLogId = filtered[0]?.id || null;
+  renderCaptureDetail(filtered.find(e => String(e.id) === String(_selectedLogId)) || null);
+}
+async function loadLogs() { await loadDiagnostics(); }
+function toggleDiagLive() {
+  if (_diagLiveTimer) { clearInterval(_diagLiveTimer); _diagLiveTimer = null; $('#diagLiveBtn').textContent = 'Live tail: off'; return; }
+  _diagLiveTimer = setInterval(loadDiagnostics, 5000);
+  $('#diagLiveBtn').textContent = 'Live tail: on';
+  loadDiagnostics();
+}
+function statusColor(s) { return s === 'ok' || s === 'cache-hit' ? 'var(--ok)' : (s === 'all-failed' || s === 'mid-stream-err' || s === 'queued-timeout') ? 'var(--err)' : 'var(--warn)'; }
+function renderDiagnosticsMetrics(d) {
+  const m = d.metrics || {}, o = d.overview || {};
+  const el = $('#diagMetrics');
+  if (el) el.innerHTML = kvHtml([['Loaded requests', fmtNum(o.loadedRequests || 0)], ['Recent/hour', fmtNum(m.throughput?.recentPerHour || 0)], ['Loaded/min', fmtNum(m.throughput?.loadedPerMinute || 0)], ['Saturation', `${fmtNum(m.saturation?.inFlight || 0)} / ${fmtNum(m.saturation?.capacity || 0)}`], ['Queued', fmtNum(m.saturation?.queued || 0)], ['Optimization requests', fmtNum(m.optimization?.requests || 0)], ['Cache hit rate', `${Math.round((m.cache?.hitRate || 0) * 100)}%`]]);
+  const br = $('#diagMetricBreakdown');
+  if (br) br.innerHTML = `<h4>Status</h4>${chipsFromMap(m.byStatus)}<h4>Models</h4>${chipsFromMap(m.byModel)}<h4>Providers</h4>${chipsFromMap(m.byProvider)}`;
+}
+function chipsFromMap(obj) { return Object.entries(obj || {}).map(([k,v]) => `<span class="diag-chip">${escapeHtml(k)}: ${fmtNum(v)}</span>`).join('') || '<div class="small mute">No metrics yet.</div>'; }
+function renderDiagnosticsErrors(d) {
+  const rows = d.errors || [];
+  const el = $('#diagErrors');
+  if (!el) return;
+  if (!rows.length) { el.innerHTML = '<div class="diag-card ok"><strong>No errors in loaded diagnostics window.</strong></div>'; return; }
+  el.innerHTML = rows.map(e => `<div class="diag-trace"><div><strong style="color:var(--err)">${escapeHtml(e.finalStatus || e.status || 'error')}</strong> <span class="mono small">${escapeHtml(e.id || '?')}</span> <span class="small" style="float:right">${fmtNum(e.totalMs || 0)}ms</span></div><div class="small mute">${escapeHtml(e.attempts?.[0]?.label || e.request?.model || 'unknown')}</div><div class="small" style="color:var(--err);margin-top:5px">${escapeHtml(e.error?.message || e.attempts?.find(a=>a.error)?.error || 'No error text captured')}</div></div>`).join('');
+}
+function renderDiagnosticsAlerts(d) {
+  const el = $('#diagAlerts');
+  if (!el) return;
+  const alerts = d.alerts || [];
+  const channels = (d.alertChannels || []).map(c => `<span class="diag-chip">${escapeHtml(c.name)}: ${c.enabled ? 'on' : 'off'}</span>`).join('');
+  el.innerHTML = alerts.map(a => `<div class="diag-trace"><strong style="color:${a.severity === 'critical' ? 'var(--err)' : a.severity === 'warning' ? 'var(--warn)' : 'var(--ok)'}">${escapeHtml(a.name)}</strong><span class="diag-chip">${escapeHtml(a.severity)}</span><div class="small mute">Rule: ${escapeHtml(a.rule)} · value: ${escapeHtml(String(a.value))}</div></div>`).join('') + `<h4>Channels</h4>${channels || '<div class="small mute">No channels.</div>'}`;
+}
+function renderDiagnosticsPerformance(d) {
+  const o = d.overview || {}, m = d.metrics || {};
+  $('#diagPerf').innerHTML = `<div class="diag-spark">${sparkBars(m.latencies || [])}</div><div class="kv">${kvHtml([['P50', `${fmtNum(o.p50Ms || 0)}ms`], ['P95', `${fmtNum(o.p95Ms || 0)}ms`], ['Max', `${fmtNum(o.maxMs || 0)}ms`], ['Loaded samples', fmtNum((m.latencies || []).length)]])}</div>`;
+  const f = m.fanout || {}, c = m.cache || {};
+  $('#diagFanout').innerHTML = kvHtml([['In-flight', `${fmtNum(f.inFlight || 0)} / ${fmtNum(f.capacity || 0)}`], ['Per-member cap', fmtNum(f.perMember || 0)], ['Queued total', fmtNum(f.queuedTotal || 0)], ['Queue timeouts', fmtNum(f.queueTimeouts || 0)], ['Cache hit rate', `${Math.round((c.hitRate || 0)*100)}%`], ['Cache entries', fmtNum(c.entries || 0)]])
+    + `<div style="grid-column:1/-1;margin-top:8px">${(f.members || []).map(x => `<span class="diag-chip">${escapeHtml(x.label || x.model || '?')}: ${fmtNum(x.inFlight||0)}/${fmtNum(x.capacity||0)} · ${fmtNum(x.lastMs||0)}ms</span>`).join('')}</div>`;
+}
+function renderDiagnosticsCost(d) {
+  const life = d.cost?.lifetime || {};
+  $('#diagCost').innerHTML = kvHtml([['Context input', fmtNum(life.total_context_input_tokens || 0)], ['Billable input', fmtNum(life.total_billable_input_tokens || 0)], ['Prompt-cache read', fmtNum(life.total_cache_read_input_tokens || 0)], ['Prompt-cache write', fmtNum(life.total_cache_creation_input_tokens || 0)], ['Output tokens', fmtNum(life.total_output_tokens || 0)], ['Spend', fmtUsd((life.total_cost_nano_usd || 0)/1e9)], ['Tokens saved', fmtNum(life.total_tokens_saved || 0)]]);
+  const prov = d.cost?.byProvider || [];
+  $('#diagProviderCost').innerHTML = prov.length ? `<table class="data"><thead><tr><th>Provider</th><th class="num">Reqs</th><th class="num">Cost</th></tr></thead><tbody>${prov.map(p => `<tr><td>${escapeHtml(p.provider)}</td><td class="num">${fmtNum(p.request_count)}</td><td class="num">${fmtUsd((p.total_cost_nano||0)/1e9)}</td></tr>`).join('')}</tbody></table>` : '<div class="small mute">No provider cost yet.</div>';
+}
+function renderDiagnosticsSystem(d) {
+  const s = d.system || {}, h = d.health || {};
+  $('#diagSystem').innerHTML = kvHtml([['Status', h.status || 'unknown'], ['Node', s.node || '—'], ['Platform', `${s.platform || '—'} ${s.arch || ''}`], ['PID', s.pid || '—'], ['CPU cores', h.cpu?.cores || '—'], ['CPU load', `${h.cpu?.loadPct ?? 0}%`], ['Memory RSS', fmtBytes(h.memory?.rss || 0)], ['Heap used', fmtBytes(h.memory?.heapUsed || 0)], ['Log bytes', fmtBytes(h.disk?.logBytes || 0)], ['Upstream conn cap', h.network?.upstreamConnections || '—'], ['Store', s.store?.backend || '—'], ['Config', s.configPath || '—'], ['Logs', s.logDir || '—']]);
+}
+function fmtBytes(n) { n = Number(n)||0; if (n > 1024*1024) return `${(n/1024/1024).toFixed(1)} MB`; if (n > 1024) return `${(n/1024).toFixed(1)} KB`; return `${n} B`; }
 async function clearLogs() {
-  try { await fetch('/api/logs/clear', { method: 'POST' }); renderLogs([], 0); const pathEl = $('#logFilePath'); if (pathEl) pathEl.textContent = ''; const cnt = $('#logCount'); if (cnt) cnt.textContent = '0 entries'; toast('Log cleared'); } catch (e) { toast(e.message, false); }
+  try {
+    await fetch('/api/logs/clear', { method: 'POST' });
+    _selectedLogId = null;
+    renderLogs([], 0);
+    renderLogExplorer([]);
+    renderCaptureDetail(null);
+    const pathEl = $('#logFilePath'); if (pathEl) pathEl.textContent = '';
+    const cnt = $('#logCount'); if (cnt) cnt.textContent = '0 entries';
+    toast('Log cleared');
+  } catch (e) { toast(e.message, false); }
 }
 function renderLogs(logs, total) {
-  const cnt = $('#logCount'); if (cnt) cnt.textContent = `${total} entr${total === 1 ? 'y' : 'ies'} on disk`;
+  const cnt = $('#logCount'); if (cnt) cnt.textContent = `${logs.length} visible · ${total} on disk`;
   const el = $('#logTable'); if (!el) return;
-  if (logs.length === 0) { el.innerHTML = '<div class="small" style="color:var(--dim);padding:8px 0">No requests logged yet.</div>'; return; }
-  const statusColor = s => s === 'ok' ? 'var(--ok)' : (s === 'all-failed' || s === 'mid-stream-err') ? 'var(--err)' : 'var(--warn)';
+  if (logs.length === 0) { el.innerHTML = '<div class="small" style="color:#64748b;padding:14px">No requests match the current filters.</div>'; return; }
   const rows = logs.map(e => {
     const t = e.time ? new Date(e.time) : new Date(e.ts || 0);
-    const time = t.toLocaleTimeString();
-    const attempts = (e.attempts || []).map(a => {
-      const skipped = a.status === 'skipped';
-      const glyph = skipped ? SVG.pause : a.status === 'ok' ? SVG.check : SVG.x;
-      const color = skipped ? 'var(--warn)' : a.status === 'ok' ? 'var(--ok)' : 'var(--err)';
-      const err = a.error ? ` — ${escapeHtml(String(a.error).slice(0, 150))}` : '';
-      return `<div style="font-size:11px;color:var(--dim);padding-left:8px;display:flex;align-items:center;gap:5px"><span class="i" style="color:${color}">${glyph}</span> ${escapeHtml(a.label || '')} <span style="color:var(--mute)">${a.durationMs}ms${err}</span></div>`;
-    }).join('');
-    const status = e.finalStatus || e.status || '?';
-    const label = e.label || (e.attempts && e.attempts[0] && e.attempts[0].label) || '?';
-    const flags = [e.stream && 'stream', e.hasTools && 'tools', e.hasSystem && 'sys'].filter(Boolean).join(' ');
-    const showAttempts = (e.attempts || []).length > 1 || ((e.attempts || []).length === 1 && (e.attempts[0].status === 'err' || e.attempts[0].status === 'skipped'));
-    return `<div style="border-bottom:1px solid var(--line);padding:8px 4px"><div style="display:flex;gap:10px;align-items:baseline"><span style="color:var(--dim);font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;flex-shrink:0">${time}</span><span style="font-size:12px;font-weight:500;color:${statusColor(status)}">${escapeHtml(status)}</span><span style="font-size:11.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</span><span style="font-size:11px;color:var(--mute);flex-shrink:0">${e.totalMs}ms${e.poolSize ? ' · ' + e.poolSize + ' pool' : ''}</span>${flags ? `<span style="font-size:10px;color:var(--dim);flex-shrink:0">${escapeHtml(flags)}</span>` : ''}</div>${showAttempts ? attempts : ''}</div>`;
+    const time = Number.isFinite(t.getTime()) ? t.toLocaleTimeString() : '—';
+    const sev = logSeverity(e);
+    return `<div class="terminal-row ${sev} ${String(_selectedLogId) === String(e.id) ? 'active' : ''}" onclick="selectDiagLog('${escapeHtml(e.id || '')}')"><span class="time">${escapeHtml(time)}</span><span class="sev">${escapeHtml(sev)}</span><span class="msg">${escapeHtml(logLine(e))}</span><span class="dur">${fmtNum(e.totalMs || 0)}ms</span></div>`;
   }).join('');
-  el.innerHTML = `<div style="max-height:500px;overflow-y:auto">${rows}</div>`;
+  el.innerHTML = rows;
+}
+function renderLogExplorer(logs) {
+  const cnt = $('#diagExplorerCount'); if (cnt) cnt.textContent = `${logs.length} visible`;
+  const el = $('#diagExplorerTable'); if (!el) return;
+  if (!logs.length) { el.innerHTML = '<div class="small mute">No requests match the current filters.</div>'; return; }
+  el.innerHTML = `<table class="data"><thead><tr><th>Time</th><th>Severity</th><th>Status</th><th>Model</th><th>Provider</th><th class="num">Latency</th><th>Input capture</th><th>Output capture</th></tr></thead><tbody>${logs.map(e => { const t = e.time ? new Date(e.time) : new Date(e.ts || 0); const input = e.request?.lastMessagePreview || e.request?.inputCapture?.map(m => m.preview).filter(Boolean).join(' ') || ''; const output = e.responseCapture || e.attempts?.find(a=>a.responsePreview)?.responsePreview || e.error?.message || e.attempts?.find(a=>a.error)?.error || ''; return `<tr onclick="selectDiagLog('${escapeHtml(e.id || '')}')" style="cursor:pointer"><td class="mono small">${escapeHtml(Number.isFinite(t.getTime()) ? t.toLocaleTimeString() : '—')}</td><td>${escapeHtml(logSeverity(e))}</td><td>${escapeHtml(e.finalStatus || e.status || '?')}</td><td>${escapeHtml(logModel(e))}</td><td>${escapeHtml(logProvider(e))}</td><td class="num">${fmtNum(e.totalMs || 0)}ms</td><td>${escapeHtml(String(input).slice(0, 90))}</td><td>${escapeHtml(String(output).slice(0, 90))}</td></tr>`; }).join('')}</tbody></table>`;
+}
+function selectDiagLog(id) { _selectedLogId = id; renderDiagnosticsLogs(); }
+function renderCaptureDetail(e) {
+  const el = $('#diagCaptureDetail');
+  if (!el) return;
+  if (!e) { el.innerHTML = '<div class="small mute">Select a log row to inspect input and output captures.</div>'; return; }
+  const input = [e.request?.systemPreview ? `system: ${e.request.systemPreview}` : '', ...(e.request?.inputCapture || []).map(m => `${m.role}: ${m.preview}`)].filter(Boolean).join('\n\n') || e.request?.lastMessagePreview || 'No input preview captured.';
+  const output = e.responseCapture || e.attempts?.find(a => a.responsePreview)?.responsePreview || e.error?.message || e.attempts?.find(a => a.error)?.error || 'No output preview captured yet.';
+  const attempts = (e.attempts || []).map(a => `${a.status || '?'} ${a.provider || '?'} ${a.model || a.label || '?'} ${fmtNum(a.durationMs || 0)}ms${a.error ? ' — ' + a.error : ''}`).join('\n') || 'No attempts recorded.';
+  el.innerHTML = `<div class="kv" style="margin-bottom:10px">${kvHtml([['Trace ID', e.id || '—'], ['Status', e.finalStatus || e.status || '—'], ['Model', logModel(e)], ['Provider', logProvider(e)], ['Latency', `${fmtNum(e.totalMs || 0)}ms`]])}</div><div class="capture-grid"><div class="capture-box"><div class="capture-head"><span>Input capture</span><span>${fmtNum(e.request?.messageCount || 0)} msg</span></div><pre>${escapeHtml(input)}</pre></div><div class="capture-box"><div class="capture-head"><span>Output / error capture</span><span>${escapeHtml(logSeverity(e))}</span></div><pre>${escapeHtml(output)}</pre></div></div><h4>Attempts</h4><pre class="cmd">${escapeHtml(attempts)}</pre>`;
 }
 
 // ── Listeners ──
@@ -1796,6 +2431,20 @@ $('#limitsSaveBtn').addEventListener('click', saveLimits);
 $('#optSaveBtn').addEventListener('click', saveOptimization);
 $('#optSaveBtn2').addEventListener('click', saveOptimization);
 wireOptToggles();
+if ($('#diagTabs')) $('#diagTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.diag-tab');
+  if (!btn) return;
+  const section = btn.dataset.diagSection;
+  for (const b of document.querySelectorAll('.diag-tab')) b.classList.toggle('active', b === btn);
+  for (const p of document.querySelectorAll('.diag-section')) p.classList.toggle('active', p.dataset.diagPanel === section);
+});
+if ($('#diagSeverityToggle')) $('#diagSeverityToggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-severity]');
+  if (!btn) return;
+  _diagSeverity = btn.dataset.severity || 'all';
+  for (const b of $('#diagSeverityToggle').querySelectorAll('button')) b.classList.toggle('active', b === btn);
+  renderDiagnosticsWorkspace();
+});
 
 loadAll();
 </script>

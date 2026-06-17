@@ -14,6 +14,22 @@ function newId(prefix) {
 // system, user, assistant, and tool_result -> user(text) collapses.
 function anthropicToOpenAIMessages(body) {
   const out = [];
+  // Track all tool_call IDs from assistant messages so we can detect orphaned
+  // tool results (tool_result blocks whose matching tool_use was trimmed away
+  // by the history trimmer). Orphaned tool messages cause Azure/OpenAI to
+  // reject with "No tool call found for function call output".
+  const seenToolCallIds = new Set();
+
+  // First pass: collect all tool_use IDs from assistant messages.
+  for (const m of body.messages || []) {
+    if (m.role !== 'assistant' || !Array.isArray(m.content)) continue;
+    for (const block of m.content) {
+      if ((block.type === 'tool_use' || block.type === 'server_tool_use') && block.id) {
+        seenToolCallIds.add(block.id);
+      }
+    }
+  }
+
   if (body.system) {
     const sys = typeof body.system === 'string'
       ? body.system
@@ -36,11 +52,25 @@ function anthropicToOpenAIMessages(body) {
         // server_tool_use = Anthropic server-executed tool (e.g. web_search via native API).
         // Treat it the same as tool_use when it appears in conversation history.
         toolCalls.push({
-          id: block.id,
+          id: block.call_id || block.id,
           type: 'function',
-          function: { name: block.name, arguments: JSON.stringify(block.input || {}) }
+          function: { name: toolNameForOpenAI(block), arguments: JSON.stringify(block.input || {}) }
         });
       } else if (block.type === 'tool_result') {
+        // Check if the matching tool_use is still present in the conversation.
+        // If it was trimmed away by the history trimmer, degrade to a user text
+        // message instead of an invalid tool message that Azure would reject.
+        if (block.tool_use_id && !seenToolCallIds.has(block.tool_use_id)) {
+          let rawContent;
+          if (typeof block.content === 'string') {
+            rawContent = block.content;
+          } else {
+            rawContent = (block.content || []).map(c => c.text || c.data || '').join('\n');
+          }
+          const label = block.is_error ? '[Tool error result]' : '[Tool result]';
+          parts.push(`${label} ${rawContent}`.slice(0, 2000));
+          continue;
+        }
         let rawContent;
         if (typeof block.content === 'string') {
           rawContent = block.content;
@@ -165,8 +195,12 @@ const ANTHROPIC_ONLY_FIELDS = new Set([
   'betas',           // beta feature flags array
   'metadata',        // user_id / session metadata
   'top_k',           // not in OpenAI spec
-  'service_tier',    // Anthropic infra routing
-  '_requestedModel', // proxy-internal tracking field
+  'service_tier',       // Anthropic infra routing
+  'context_management', // Anthropic compaction/context-editing controls
+  'cache_control',      // top-level prompt cache auto-placement
+  'fallbacks',          // Anthropic/Fable refusal fallback routing
+  'fallback_credit_token',
+  '_requestedModel',    // proxy-internal tracking field
 ]);
 
 // Strip every field and nested structure that only Anthropic's own API understands
@@ -214,6 +248,12 @@ function sanitizeForUpstream(body, opts = {}) {
   //    (it confuses non-Claude models and leaks internal reasoning)
   if (Array.isArray(out.messages)) {
     out.messages = out.messages.map(msg => {
+      if (msg.role === 'system') {
+        const systemText = Array.isArray(msg.content)
+          ? msg.content.map(blk => blk?.text || '').filter(Boolean).join('\n')
+          : String(msg.content || '');
+        return { role: 'user', content: systemText ? `[System update]\n${systemText}` : '[System update]' };
+      }
       if (!Array.isArray(msg.content)) return msg;
       const content = [];
       for (const blk of msg.content) {
@@ -304,15 +344,26 @@ function parseSimulatedTools(text) {
   return tools;
 }
 
+function enhanceToolDescription(tool) {
+  const base = tool.description
+    || BUILTIN_TOOL_DESCRIPTIONS[tool.name]
+    || `Tool: ${tool.name}`;
+  if (!/^(Bash|bash)$/.test(tool.name || '')) return base;
+  return `${base}\nPython portability: do not assume python3 exists. In Bash use: command -v python3 >/dev/null 2>&1 && PY=python3 || PY=python; $PY -m pytest ... . On Windows use python or py -3.`;
+}
+
+function toolNameForOpenAI(tool, idx = 0) {
+  const raw = String(tool?.name || tool?.type || `tool_${idx}`);
+  return raw.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || `tool_${idx}`;
+}
+
 function anthropicToolsToOpenAI(tools) {
   if (!tools || tools.length === 0) return undefined;
-  return tools.map(t => ({
+  return tools.map((t, i) => ({
     type: 'function',
     function: {
-      name: t.name,
-      description: t.description
-        || BUILTIN_TOOL_DESCRIPTIONS[t.name]
-        || `Tool: ${t.name}`,
+      name: toolNameForOpenAI(t, i),
+      description: enhanceToolDescription(t),
       parameters: t.input_schema
         || COMPUTER_USE_SCHEMAS[t.type]
         || { type: 'object', properties: {} }
@@ -355,6 +406,39 @@ function repairJSON(str) {
   }
 }
 
+// Computes only the missing closing suffix (braces, quotes, etc.) needed to repair JSON
+function getJSONRepairSuffix(str) {
+  if (!str) return '';
+  str = str.trim();
+  if (str === "") return '';
+  try {
+    JSON.parse(str);
+    return ''; // already valid
+  } catch (e) {
+    let fixed = str;
+    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+    let openBraces = (fixed.match(/{/g) || []).length - (fixed.match(/}/g) || []).length;
+    let openBrackets = (fixed.match(/\[/g) || []).length - (fixed.match(/\]/g) || []).length;
+    let inString = false;
+    let escape = false;
+    for (let i = 0; i < fixed.length; i++) {
+      if (fixed[i] === '\\' && !escape) escape = true;
+      else if (fixed[i] === '"' && !escape) inString = !inString;
+      else escape = false;
+    }
+    let suffix = '';
+    if (inString) suffix += '"';
+    for (let i = 0; i < openBrackets; i++) suffix += ']';
+    for (let i = 0; i < openBraces; i++) suffix += '}';
+    try {
+      JSON.parse(str + suffix);
+      return suffix;
+    } catch (e2) {
+      return '';
+    }
+  }
+}
+
 // Build an SSE writer that emits canonical Anthropic events.
 function createAnthropicSSEEmitter(res, model) {
   const messageId = newId('msg');
@@ -368,6 +452,8 @@ function createAnthropicSSEEmitter(res, model) {
   let nextBlockIndex = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheCreationInputTokens = 0;
+  let cacheReadInputTokens = 0;
   let stopReason = 'end_turn';
 
   // Simulation Interceptor state
@@ -383,7 +469,12 @@ function createAnthropicSSEEmitter(res, model) {
   function start(usage = {}) {
     if (started) return;
     started = true;
-    inputTokens = usage.input_tokens || 0;
+    inputTokens = usage.input_tokens || usage.prompt_tokens || 0;
+    cacheCreationInputTokens = usage.cache_creation_input_tokens || 0;
+    cacheReadInputTokens = usage.cache_read_input_tokens || usage.prompt_tokens_details?.cache_read_input_tokens || 0;
+    const startUsage = { input_tokens: inputTokens, output_tokens: 0 };
+    if (cacheCreationInputTokens) startUsage.cache_creation_input_tokens = cacheCreationInputTokens;
+    if (cacheReadInputTokens) startUsage.cache_read_input_tokens = cacheReadInputTokens;
     send('message_start', {
       type: 'message_start',
       message: {
@@ -394,7 +485,7 @@ function createAnthropicSSEEmitter(res, model) {
         content: [],
         stop_reason: null,
         stop_sequence: null,
-        usage: { input_tokens: inputTokens, output_tokens: 0 }
+        usage: startUsage
       }
     });
     send('ping', { type: 'ping' });
@@ -450,6 +541,14 @@ function createAnthropicSSEEmitter(res, model) {
   function deltaText(text) {
     if (!text) return;
     start();
+
+    // Azure AI Content Filter sometimes injects this exact string as a single delta
+    // when a tool call arguments or payload triggers a safety match, while still
+    // emitting the tool calls. Strip it so Claude Code doesn't print it.
+    if (text.includes("I'm sorry, but I cannot assist with that request.")) {
+      text = text.replace("I'm sorry, but I cannot assist with that request.", "").trim();
+      if (!text) return;
+    }
 
     if (simMode) {
       textBuffer += text;
@@ -524,8 +623,24 @@ function createAnthropicSSEEmitter(res, model) {
     }
     if (tc.function?.name && !block.name) block.name = tc.function.name;
     if (tc.function?.arguments) {
-      // Buffer the JSON rather than streaming it immediately, allowing us to repair it at the end.
-      block.argsBuf += tc.function.arguments;
+      const incoming = tc.function.arguments;
+      let chunk = '';
+      if (incoming.startsWith(block.argsBuf) && incoming.length > block.argsBuf.length) {
+        // Full accumulated arguments passed, extract the new suffix chunk
+        chunk = incoming.slice(block.argsBuf.length);
+        block.argsBuf = incoming;
+      } else if (!block.argsBuf.endsWith(incoming)) {
+        // Incremental arguments chunk passed
+        chunk = incoming;
+        block.argsBuf += incoming;
+      }
+      if (chunk) {
+        send('content_block_delta', {
+          type: 'content_block_delta',
+          index: block.index,
+          delta: { type: 'input_json_delta', partial_json: chunk }
+        });
+      }
     }
   }
 
@@ -538,7 +653,10 @@ function createAnthropicSSEEmitter(res, model) {
       tool_use: 'tool_use',
       end_turn: 'end_turn',
       max_tokens: 'max_tokens',
-      stop_sequence: 'stop_sequence'
+      stop_sequence: 'stop_sequence',
+      model_context_window_exceeded: 'model_context_window_exceeded',
+      refusal: 'refusal',
+      pause_turn: 'pause_turn'
     };
     stopReason = map[r] || 'end_turn';
     if (res.__proxyTrace) res.__proxyTrace.note({ stopReason });
@@ -550,6 +668,9 @@ function createAnthropicSSEEmitter(res, model) {
     if (usage.output_tokens != null) outputTokens = usage.output_tokens;
     if (usage.prompt_tokens != null) inputTokens = usage.prompt_tokens;
     if (usage.completion_tokens != null) outputTokens = usage.completion_tokens;
+    if (usage.cache_creation_input_tokens != null) cacheCreationInputTokens = usage.cache_creation_input_tokens;
+    if (usage.cache_read_input_tokens != null) cacheReadInputTokens = usage.cache_read_input_tokens;
+    if (usage.prompt_tokens_details?.cache_read_input_tokens != null) cacheReadInputTokens = usage.prompt_tokens_details.cache_read_input_tokens;
   }
 
   function end() {
@@ -610,12 +731,14 @@ function createAnthropicSSEEmitter(res, model) {
 
     for (const block of toolBlocks.values()) {
       if (block.argsBuf !== undefined) {
-        const repairedArgs = repairJSON(block.argsBuf);
-        send('content_block_delta', {
-          type: 'content_block_delta',
-          index: block.index,
-          delta: { type: 'input_json_delta', partial_json: repairedArgs }
-        });
+        const suffix = getJSONRepairSuffix(block.argsBuf);
+        if (suffix) {
+          send('content_block_delta', {
+            type: 'content_block_delta',
+            index: block.index,
+            delta: { type: 'input_json_delta', partial_json: suffix }
+          });
+        }
       }
       send('content_block_stop', { type: 'content_block_stop', index: block.index });
     }
@@ -634,10 +757,13 @@ function createAnthropicSSEEmitter(res, model) {
       send('content_block_stop', { type: 'content_block_stop', index: emptyIdx });
     }
 
+    const deltaUsage = { output_tokens: outputTokens };
+    if (cacheCreationInputTokens) deltaUsage.cache_creation_input_tokens = cacheCreationInputTokens;
+    if (cacheReadInputTokens) deltaUsage.cache_read_input_tokens = cacheReadInputTokens;
     send('message_delta', {
       type: 'message_delta',
       delta: { stop_reason: stopReason, stop_sequence: null },
-      usage: { output_tokens: outputTokens }
+      usage: deltaUsage
     });
     send('message_stop', { type: 'message_stop' });
     if (res.__proxyTrace) {
@@ -696,7 +822,10 @@ function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, 
   const map = {
     stop: 'end_turn', length: 'max_tokens', tool_calls: 'tool_use',
     tool_use: 'tool_use', end_turn: 'end_turn', max_tokens: 'max_tokens',
-    stop_sequence: 'stop_sequence'
+    stop_sequence: 'stop_sequence',
+    model_context_window_exceeded: 'model_context_window_exceeded',
+    refusal: 'refusal',
+    pause_turn: 'pause_turn'
   };
   return {
     id: newId('msg'),
@@ -708,7 +837,9 @@ function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, 
     stop_sequence: null,
     usage: {
       input_tokens: usage?.input_tokens ?? usage?.prompt_tokens ?? 0,
-      output_tokens: usage?.output_tokens ?? usage?.completion_tokens ?? 0
+      output_tokens: usage?.output_tokens ?? usage?.completion_tokens ?? 0,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens ?? 0,
+      cache_read_input_tokens: usage?.cache_read_input_tokens ?? usage?.prompt_tokens_details?.cache_read_input_tokens ?? 0
     }
   };
 }

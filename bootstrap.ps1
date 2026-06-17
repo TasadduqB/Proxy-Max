@@ -79,7 +79,7 @@ function Ensure-Node {
   }
 
   # Portable fallback: download Node ZIP
-  $ver  = "v20.18.0"
+  $ver  = "v24.16.0"
   $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
   $zip  = "node-$ver-win-$arch.zip"
   $url  = "https://nodejs.org/dist/$ver/$zip"

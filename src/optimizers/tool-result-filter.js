@@ -1,7 +1,8 @@
 /**
  * Tool Result Filter
  * Applied at the proxy layer to tool_result content blocks inside user messages.
- * Strips ANSI codes, removes blank lines, and hard-truncates very long outputs.
+ * Strips ANSI codes, removes blank lines, deduplicates repeated log lines,
+ * and hard-truncates very long outputs.
  *
  * This is the proxy-transparent equivalent of the dashboard "Output Filters" tab —
  * no manual copy-paste required; every tool result is filtered automatically.
@@ -15,11 +16,13 @@ class ToolResultFilter {
    * @param {object} options
    * @param {boolean} [options.stripAnsi=true]       strip ANSI escape codes (display-only; content-preserving)
    * @param {boolean} [options.stripBlankLines=false] collapse blank runs (lossy on whitespace-sensitive content)
+   * @param {boolean} [options.dedupeLines=false]     collapse repeated adjacent log lines
    * @param {number}  [options.maxChars=0]            per tool_result cap; 0 disables truncation entirely
    */
   constructor(options = {}) {
     this.stripAnsi       = options.stripAnsi !== false;
     this.stripBlankLines = options.stripBlankLines === true;
+    this.dedupeLines     = options.dedupeLines === true;
     this.maxChars        = Number(options.maxChars) || 0; // 0 = no truncation
   }
 
@@ -28,10 +31,31 @@ class ToolResultFilter {
     let out = text;
     if (this.stripAnsi)       out = out.replace(ANSI_RE, '');
     if (this.stripBlankLines) out = out.replace(BLANK_LINE_RE, '\n');
+    if (this.dedupeLines)     out = this._dedupeAdjacentLines(out);
     if (this.maxChars > 0 && out.length > this.maxChars) {
       out = out.slice(0, this.maxChars) + `\n… [truncated — ${text.length - this.maxChars} chars omitted]`;
     }
     return out;
+  }
+
+  _dedupeAdjacentLines(text) {
+    const lines = text.split('\n');
+    const out = [];
+    let last = null;
+    let count = 0;
+    const flush = () => {
+      if (last === null) return;
+      out.push(last);
+      if (count > 1) out.push(`… [repeated ${count - 1} more times]`);
+    };
+    for (const line of lines) {
+      if (line === last) { count++; continue; }
+      flush();
+      last = line;
+      count = 1;
+    }
+    flush();
+    return out.join('\n');
   }
 
   /**

@@ -20,17 +20,36 @@
 // Support PROXY_INSECURE=1 or NODE_TLS_REJECT_UNAUTHORIZED=0 for corporate SSL inspection proxies
 // that inject a self-signed cert into the chain (SELF_SIGNED_CERT_IN_CHAIN error).
 let _insecureDispatcher = null;
+let _keepAliveDispatcher = null;
 let _undiciUnavailable = false;
-function getInsecureDispatcher() {
-  if (_insecureDispatcher) return _insecureDispatcher;
+function getUndiciAgent(opts = {}) {
   if (_undiciUnavailable) return null;
   try {
     const { Agent } = require('undici');
-    _insecureDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+    return new Agent({
+      keepAliveTimeout: 60000,
+      keepAliveMaxTimeout: 120000,
+      connections: Math.max(16, Number(process.env.PROXY_MAX_UPSTREAM_CONNECTIONS || 200)),
+      pipelining: 1,
+      ...opts
+    });
   } catch {
     _undiciUnavailable = true;
+    return null;
   }
+}
+function getKeepAliveDispatcher() {
+  if (_keepAliveDispatcher) return _keepAliveDispatcher;
+  _keepAliveDispatcher = getUndiciAgent();
+  return _keepAliveDispatcher;
+}
+function getInsecureDispatcher() {
+  if (_insecureDispatcher) return _insecureDispatcher;
+  _insecureDispatcher = getUndiciAgent({ connect: { rejectUnauthorized: false } });
   return _insecureDispatcher;
+}
+function dispatcherForRequest() {
+  return ALLOW_INSECURE ? getInsecureDispatcher() : getKeepAliveDispatcher();
 }
 
 // When undici is unavailable, disable TLS verification process-wide via env var.
@@ -61,14 +80,16 @@ function isCertError(err) {
 
 // Fetch with automatic insecure retry on TLS cert errors.
 async function fetchWithCertFallback(url, opts) {
+  const dispatcher = opts.dispatcher || dispatcherForRequest();
+  const firstOpts = dispatcher ? { ...opts, dispatcher } : opts;
   try {
-    return await fetch(url, opts);
+    return await fetch(url, firstOpts);
   } catch (err) {
     if (!isCertError(err)) throw err;
-    const dispatcher = getInsecureDispatcher();
+    const insecureDispatcher = getInsecureDispatcher();
     console.warn(`[proxy] TLS cert error (${err?.cause?.code}) — retrying with rejectUnauthorized=false for ${url}`);
-    if (dispatcher) {
-      return await fetch(url, { ...opts, dispatcher });
+    if (insecureDispatcher) {
+      return await fetch(url, { ...opts, dispatcher: insecureDispatcher });
     }
     // undici not available as standalone module — fall back to process-level env var
     enableInsecureTlsFallback(`TLS cert error (${err?.cause?.code})`);
@@ -121,32 +142,23 @@ function hasWebSearchTool(tools) {
 async function performWebSearch(query) {
   if (!query) return [{ title: 'No query', url: '', snippet: 'No search query was provided.' }];
   try {
-    const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const r = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProxyMax/1.0; +web-search)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
       signal: AbortSignal.timeout(8000)
     });
     if (!r.ok) throw new Error(`DuckDuckGo API ${r.status}`);
-    const data = await r.json();
+    const t = await r.text();
     const results = [];
-    if (data.AbstractText) {
+    const regex = /<h2 class="result__title">[\s\S]*?<a[^>]+href="[^"]*?uddg=([^"&]+)[^"]*"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet[^>]*>([\s\S]*?)<\/a>/g;
+    let m;
+    while ((m = regex.exec(t)) !== null) {
+      if (results.length >= 5) break;
       results.push({
-        title: data.Heading || query,
-        url: data.AbstractURL || `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
-        snippet: data.AbstractText
+        url: decodeURIComponent(m[1]),
+        title: m[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim(),
+        snippet: m[3].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').trim()
       });
-    }
-    if (data.Answer) {
-      results.push({ title: 'Instant Answer', url: data.AnswerURL || '', snippet: data.Answer });
-    }
-    for (const topic of (data.RelatedTopics || []).slice(0, 5)) {
-      if (topic.Text && topic.FirstURL) {
-        results.push({
-          title: topic.Text.split(' - ')[0].slice(0, 100),
-          url: topic.FirstURL,
-          snippet: topic.Text
-        });
-      }
     }
     if (results.length === 0) {
       results.push({
@@ -155,7 +167,7 @@ async function performWebSearch(query) {
         snippet: `No instant results for "${query}". Visit: https://duckduckgo.com/?q=${encodeURIComponent(query)}`
       });
     }
-    return results.slice(0, 5);
+    return results;
   } catch (e) {
     console.warn('[proxy] [web_search] error:', e.message);
     return [{ title: 'Search Error', url: '', snippet: `Web search failed: ${e.message}` }];
@@ -184,6 +196,14 @@ async function executeProxyTools(toolCalls) {
 // Used to clamp max_tokens so we never send a value that, combined with the
 // input, exceeds the model's limit.  Models not listed default to 131072.
 const MODEL_MAX_CONTEXT = {
+  // GPT-5.x / Azure deployments (1M token context)
+  'gpt-5.5':                                  1048576,
+  'gpt-5.1':                                  1048576,
+  'gpt-5.1-codex-max':                        1048576,
+  'gpt-5':                                    1048576,
+  'gpt-chat-latest':                          1048576,
+  'GPT-5.5-Max-Proxy':                        1048576,
+  // NVIDIA models
   'nvidia/nemotron-3-super-120b-a12b':        131072,
   'nvidia/nemotron-3-ultra-550b-a55b':        131072,
   'nvidia/llama-3.3-nemotron-super-49b-v1':   131072,
@@ -336,6 +356,10 @@ RULES — violation causes immediate failure:
   return payload;
 }
 
+function isReasoningModel(model) {
+  return /(^|[-_/])(o[1-9]|gpt-5|reasoning|deepseek-r|nemotron|qwen3)/i.test(String(model || ''));
+}
+
 // Azure /openai/responses uses a different request shape than chat/completions:
 //   - `input` (list of items) instead of `messages`
 //   - system prompt goes in `instructions`
@@ -344,22 +368,32 @@ RULES — violation causes immediate failure:
 //   - tool calls / results are top-level items, not message fields
 function buildResponsesPayload(body, model) {
   const { instructions, input } = buildResponsesInput(body);
+  const reasoningModel = isReasoningModel(model);
   const payload = {
     model,
     input,
     stream: !!body.stream,
-    temperature: body.temperature,
-    top_p: body.top_p
+    ...(reasoningModel ? {} : { temperature: body.temperature, top_p: body.top_p })
   };
   if (instructions) payload.instructions = instructions;
-  if (body.max_tokens != null) payload.max_output_tokens = body.max_tokens;
+  if (body.tools && body.tools.length > 0) {
+    const toolHint = `[MANDATORY TOOL USE]
+Use native Responses API function calls only. Never write tool calls as text/XML/JSON/code blocks.
+If shell Python is needed, prefer this portable pattern instead of bare python3: command -v python3 >/dev/null 2>&1 && PY=python3 || PY=python; $PY -m pytest ...
+On Windows use python or py -3. If python3 is missing, try python or py before failing.`;
+    payload.instructions = payload.instructions ? `${payload.instructions}\n\n${toolHint}` : toolHint;
+  }
+  const safeMaxTokens = clampMaxTokens(body, model);
+  if (safeMaxTokens != null) payload.max_output_tokens = safeMaxTokens;
   if (body.stop_sequences && body.stop_sequences.length) payload.stop = body.stop_sequences;
 
   if (body.tools && body.tools.length > 0) {
-    payload.tools = body.tools.map(t => ({
+    payload.tools = body.tools.map((t, i) => ({
       type: 'function',
-      name: t.name,
-      description: t.description || `Native computer use tool: ${t.name}`,
+      name: toolNameForOpenAI(t, i),
+      description: /^(Bash|bash)$/.test(t.name || '')
+        ? `${t.description || `Native computer use tool: ${t.name}`}\nPython portability: do not assume python3 exists. In Bash use: command -v python3 >/dev/null 2>&1 && PY=python3 || PY=python; $PY -m pytest ... . On Windows use python or py -3.`
+        : (t.description || `Native computer use tool: ${t.name || t.type || `tool_${i}`}`),
       parameters: t.input_schema || COMPUTER_USE_SCHEMAS[t.type] || { type: 'object', properties: {} }
     }));
   }
@@ -373,6 +407,42 @@ function buildResponsesPayload(body, model) {
   return payload;
 }
 
+function toolNameForOpenAI(tool, idx = 0) {
+  const raw = String(tool?.name || tool?.type || `tool_${idx}`);
+  return raw.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || `tool_${idx}`;
+}
+
+function responsesTextPart(role, text) {
+  return { type: role === 'assistant' ? 'output_text' : 'input_text', text };
+}
+
+function isResponsesOutputItemId(id) {
+  return typeof id === 'string' && id.startsWith('fc_');
+}
+
+function normalizeResponsesCallId(id) {
+  if (isResponsesOutputItemId(id)) return null;
+  return typeof id === 'string' && id ? id : null;
+}
+
+function safeResponsesCallId(id, idx) {
+  const normalized = normalizeResponsesCallId(id);
+  return normalized || newId(`call${idx ?? 0}`);
+}
+
+function stringifyToolResultContent(block) {
+  const raw = typeof block.content === 'string'
+    ? block.content
+    : (block.content || []).map(c => {
+      if (!c) return '';
+      if (c.type === 'web_search_result' || c.type === 'web_search_tool_result') {
+        return `[${c.title || 'Result'}](${c.url || ''}): ${c.encrypted_content ? '(encrypted)' : (c.text || '')}`;
+      }
+      return c.text || c.data || '';
+    }).join('\n');
+  return block.is_error ? `[Tool error] ${raw}` : raw;
+}
+
 // Convert an Anthropic Messages body into Responses-API { instructions, input }.
 function buildResponsesInput(body) {
   let instructions = '';
@@ -382,22 +452,55 @@ function buildResponsesInput(body) {
       : body.system.map(b => b.text || '').join('\n');
   }
   const input = [];
+  const seenFunctionCalls = new Set();
+  const functionCallIdsByToolUseId = new Map();
+  const orphanToolResultIds = [];
+
   for (const m of body.messages || []) {
+    if (m.role === 'system') {
+      const systemText = typeof m.content === 'string'
+        ? m.content
+        : (m.content || []).map(b => b?.text || '').filter(Boolean).join('\n');
+      input.push({ role: 'user', content: systemText ? `[System update]\n${systemText}` : '[System update]' });
+      continue;
+    }
     if (typeof m.content === 'string') {
       input.push({ role: m.role, content: m.content });
       continue;
     }
     const parts = [];
     for (const block of m.content || []) {
+      if (!block) continue;
       if (block.type === 'text') {
-        if (block.text) parts.push({ type: m.role === 'assistant' ? 'output_text' : 'input_text', text: block.text });
+        if (block.text) parts.push(responsesTextPart(m.role, block.text));
       } else if (block.type === 'tool_use' || block.type === 'server_tool_use') {
-        input.push({ type: 'function_call', call_id: block.id, name: block.name, arguments: JSON.stringify(block.input || {}) });
+        if (!block.id) continue;
+        const replayId = block.call_id || block.id;
+        const callId = block.call_id
+          ? safeResponsesCallId(block.call_id, seenFunctionCalls.size)
+          : isResponsesOutputItemId(block.id)
+            ? null
+            : safeResponsesCallId(block.id, seenFunctionCalls.size);
+        if (!callId) continue;
+        const normalizedId = normalizeResponsesCallId(block.id);
+        const normalizedReplayId = normalizeResponsesCallId(replayId);
+        seenFunctionCalls.add(callId);
+        functionCallIdsByToolUseId.set(block.id, callId);
+        functionCallIdsByToolUseId.set(replayId, callId);
+        functionCallIdsByToolUseId.set(callId, callId);
+        if (normalizedId) functionCallIdsByToolUseId.set(normalizedId, callId);
+        if (normalizedReplayId) functionCallIdsByToolUseId.set(normalizedReplayId, callId);
+        input.push({ type: 'function_call', call_id: callId, name: toolNameForOpenAI(block), arguments: JSON.stringify(block.input || {}) });
       } else if (block.type === 'tool_result') {
-        const out = typeof block.content === 'string'
-          ? block.content
-          : (block.content || []).map(c => c.text || c.data || '').join('\n');
-        input.push({ type: 'function_call_output', call_id: block.tool_use_id, output: out });
+        const out = stringifyToolResultContent(block);
+        const normalizedToolUseId = normalizeResponsesCallId(block.tool_use_id);
+        const callId = functionCallIdsByToolUseId.get(block.tool_use_id) || functionCallIdsByToolUseId.get(normalizedToolUseId);
+        if (callId && seenFunctionCalls.has(callId)) {
+          input.push({ type: 'function_call_output', call_id: callId, output: out });
+        } else {
+          orphanToolResultIds.push(block.tool_use_id || '(missing)');
+          parts.push(responsesTextPart(m.role, `[Tool result for omitted tool call ${block.tool_use_id || '(missing id)'}]\n${out}`));
+        }
       } else if (block.type === 'image' && block.source) {
         const url = block.source.type === 'base64'
           ? `data:${block.source.media_type};base64,${block.source.data}`
@@ -415,6 +518,13 @@ function buildResponsesInput(body) {
     }
     if (parts.length) input.push({ role: m.role, content: parts });
   }
+
+  if (orphanToolResultIds.length) {
+    const preview = orphanToolResultIds.slice(0, 5).join(', ');
+    const suffix = orphanToolResultIds.length > 5 ? `, +${orphanToolResultIds.length - 5} more` : '';
+    console.warn(`[proxy] [responses] converted ${orphanToolResultIds.length} orphan tool_result block(s) to text (${preview}${suffix})`);
+  }
+
   return { instructions, input };
 }
 
@@ -438,7 +548,10 @@ async function callWithWebSearchLoop(providerCfg, sanitizedBody, originalBody, r
     const payloadNonStream = { ...payload, stream: false };
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), connectTimeoutMs);
+    // Non-streaming calls in the web search loop can take significantly longer
+    // than streaming calls — use a generous 5-minute timeout per iteration.
+    const webSearchTimeoutMs = Math.max(connectTimeoutMs, 300000);
+    const timer = setTimeout(() => controller.abort(), webSearchTimeoutMs);
     let upstream;
     try {
       upstream = await fetchWithCertFallback(url, {
@@ -446,8 +559,7 @@ async function callWithWebSearchLoop(providerCfg, sanitizedBody, originalBody, r
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify(payloadNonStream),
         signal: controller.signal,
-        ...(ALLOW_INSECURE && getInsecureDispatcher() ? { dispatcher: getInsecureDispatcher() } : {})
-      });
+        });
     } catch (err) {
       clearTimeout(timer);
       if (err.name === 'AbortError') throw new Error(`Upstream timed out (${connectTimeoutMs}ms)`);
@@ -562,7 +674,6 @@ async function callOpenAICompatible(providerCfg, body, res) {
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(payload),
       signal: controller.signal,
-      ...(ALLOW_INSECURE && getInsecureDispatcher() ? { dispatcher: getInsecureDispatcher() } : {})
     });
   } catch (err) {
     clearTimeout(timer);
@@ -671,10 +782,38 @@ async function streamChatCompletions(upstream, emitter, idleTimeoutMs) {
   }
 }
 
+function responsesToolUseId(item, idx) {
+  const callId = typeof item?.call_id === 'string' ? item.call_id : null;
+  // Responses API has two IDs for function calls: the output item id (`fc_*`) and
+  // the replay id (`call_id`). Only `call_id` is valid for the next turn's
+  // `function_call_output.call_id`; never synthesize one from `fc_*` because
+  // Azure rejects tool outputs that reference unknown call IDs.
+  if (callId) return callId;
+
+  const outputId = item?.id || item?.outputId;
+  if (isResponsesOutputItemId(outputId)) return null;
+  return safeResponsesCallId(outputId, idx);
+}
+
+function emitResponsesFunctionCall(emitter, idx, item) {
+  const id = responsesToolUseId(item, idx);
+  if (!id) return false;
+  emitter.deltaToolCall(idx, {
+    id,
+    function: { name: item.name || '', arguments: item.arguments || item.argsBuf || '' }
+  });
+  return true;
+}
+
 // Azure /openai/responses SSE streaming (Responses API event format).
 async function streamResponsesApi(upstream, emitter, idleTimeoutMs) {
-  // Track in-flight function_call items so we can detect missed delta chunks.
-  const pending = new Map(); // output_index → { id, name, argsBuf }
+  // Responses streams may expose the output item id (fc_...) before the real
+  // call_id is available. Anthropic history replays tool_result.tool_use_id back
+  // as function_call_output.call_id, and Azure rejects fc_* there. Buffer each
+  // function call until its done event so we only expose a replay-safe id.
+  const pending = new Map(); // output_index → { id, outputId, call_id, name, argsBuf }
+  const emittedFunctionCallIndexes = new Set();
+  let sawFunctionCall = false;
 
   for await (const evt of iterSSE(upstream, idleTimeoutMs)) {
     if (!evt.type) {
@@ -684,6 +823,7 @@ async function streamResponsesApi(upstream, emitter, idleTimeoutMs) {
         const delta = choice?.delta || {};
         if (delta.content) emitter.deltaText(delta.content);
         if (delta.tool_calls) {
+          sawFunctionCall = true;
           for (const tc of delta.tool_calls) emitter.deltaToolCall(tc.index ?? 0, tc);
         }
         if (choice?.finish_reason) emitter.setStopReason(choice.finish_reason);
@@ -700,42 +840,85 @@ async function streamResponsesApi(upstream, emitter, idleTimeoutMs) {
       case 'response.output_item.added':
         if (evt.item?.type === 'function_call') {
           const idx = evt.output_index ?? 0;
-          pending.set(idx, { id: evt.item.id, name: evt.item.name || '', argsBuf: '' });
-          emitter.deltaToolCall(idx, {
+          sawFunctionCall = true;
+          pending.set(idx, {
             id: evt.item.id,
-            function: { name: evt.item.name || '', arguments: '' }
+            outputId: evt.item.id,
+            call_id: evt.item.call_id,
+            name: evt.item.name || '',
+            argsBuf: ''
           });
         }
         break;
       case 'response.output_item.done':
-        // Finalize: if delta stream was incomplete, emit the missing tail.
         if (evt.item?.type === 'function_call') {
           const idx = evt.output_index ?? 0;
-          const p = pending.get(idx);
-          if (p && evt.item.arguments != null) {
-            const missing = String(evt.item.arguments).slice(p.argsBuf.length);
-            if (missing) emitter.deltaToolCall(idx, { function: { arguments: missing } });
+          sawFunctionCall = true;
+          const p = pending.get(idx) || {};
+          const doneItem = {
+            ...p,
+            ...evt.item,
+            outputId: p.outputId || evt.item.id,
+            name: evt.item.name || p.name || '',
+            arguments: evt.item.arguments != null ? String(evt.item.arguments) : p.argsBuf
+          };
+          if (doneItem.call_id || doneItem.id || doneItem.outputId) {
+            if (emitResponsesFunctionCall(emitter, idx, doneItem)) emittedFunctionCallIndexes.add(idx);
+          } else {
+            pending.set(idx, doneItem);
           }
-          pending.delete(idx);
         }
         break;
       case 'response.function_call_arguments.delta': {
         const idx = evt.output_index ?? 0;
         const chunk = evt.delta || '';
-        const p = pending.get(idx);
-        if (p) p.argsBuf += chunk;
-        emitter.deltaToolCall(idx, { function: { arguments: chunk } });
+        const p = pending.get(idx) || { argsBuf: '' };
+        p.argsBuf = (p.argsBuf || '') + chunk;
+        pending.set(idx, p);
+        const id = responsesToolUseId(p, idx) || safeResponsesCallId(p.outputId || p.id, idx);
+        emitter.deltaToolCall(idx, {
+          id,
+          function: { name: p.name || '', arguments: chunk }
+        });
         break;
       }
-      case 'response.function_call_arguments.done':
-        break; // already accumulated via delta
+      case 'response.function_call_arguments.done': {
+        if (evt.arguments != null) {
+          const idx = evt.output_index ?? 0;
+          const p = pending.get(idx) || {};
+          p.argsBuf = String(evt.arguments);
+          pending.set(idx, p);
+        }
+        break;
+      }
       case 'response.completed':
       case 'response.incomplete': {
         const resp = evt.response || {};
         if (resp.usage) emitter.setUsage(resp.usage);
+        for (const item of resp.output || []) {
+          if (item.type === 'function_call') {
+            const idx = item.output_index ?? item.index ?? 0;
+            if (pending.has(idx) && !emittedFunctionCallIndexes.has(idx)) {
+              sawFunctionCall = true;
+              const p = pending.get(idx);
+              if (emitResponsesFunctionCall(emitter, idx, {
+                ...p,
+                ...item,
+                outputId: p.outputId || item.id,
+                arguments: item.arguments != null ? String(item.arguments) : p.argsBuf
+              })) emittedFunctionCallIndexes.add(idx);
+              pending.delete(idx);
+            }
+          }
+        }
+        for (const [idx, p] of pending) {
+          if (emittedFunctionCallIndexes.has(idx)) continue;
+          if (emitResponsesFunctionCall(emitter, idx, p)) emittedFunctionCallIndexes.add(idx);
+        }
+        pending.clear();
         const truncated = resp.status === 'incomplete' ||
           resp.incomplete_details?.reason === 'max_output_tokens';
-        const hasTools = pending.size > 0 ||
+        const hasTools = sawFunctionCall ||
           (resp.output || []).some(o => o.type === 'function_call');
         emitter.setStopReason(hasTools ? 'tool_calls' : truncated ? 'length' : 'stop');
         break;
@@ -751,6 +934,18 @@ async function streamResponsesApi(upstream, emitter, idleTimeoutMs) {
 }
 
 // Parse non-streaming response — handles both chat/completions and Responses API formats.
+function parseResponsesText(item) {
+  if (!item) return '';
+  if (typeof item.output_text === 'string') return item.output_text;
+  if (Array.isArray(item.content)) {
+    return item.content
+      .map(c => c?.text || c?.output_text || '')
+      .filter(Boolean)
+      .join('');
+  }
+  return '';
+}
+
 function parseResponse(json, isResponsesApi) {
   // Detect format at runtime so we handle format-mismatches gracefully.
   if (!isResponsesApi && json.choices) {
@@ -768,20 +963,29 @@ function parseResponse(json, isResponsesApi) {
 
   // Responses API: { output: [ { type:'message', content: [{type:'output_text', text:'...'}] } ] }
   if (json.output) {
-    const outputMsg = json.output.find(o => o.type === 'message');
-    const textPart = outputMsg?.content?.find(c => c.type === 'output_text' || c.type === 'text');
-    const thinkingPart = outputMsg?.content?.find(c => c.type === 'reasoning' || c.type === 'thinking');
+    const outputMessages = json.output.filter(o => o.type === 'message');
+    const text = outputMessages.map(parseResponsesText).filter(Boolean).join('');
+    const thinkingParts = outputMessages.flatMap(o => o.content || [])
+      .filter(c => c.type === 'reasoning' || c.type === 'thinking');
+    const thinking = thinkingParts
+      .map(c => c.text || c.summary?.map(s => s.text || '').join('') || '')
+      .filter(Boolean)
+      .join('');
     const toolItems = (json.output || []).filter(o => o.type === 'function_call');
     const truncated = json.status === 'incomplete' ||
       json.incomplete_details?.reason === 'max_output_tokens';
     return {
-      text: textPart?.text || '',
-      thinking: thinkingPart?.text || thinkingPart?.summary?.map(s => s.text || '').join('') || '',
-      toolCalls: toolItems.map(tc => ({
-        id: tc.id, name: tc.name, arguments: tc.arguments
-      })),
+      text,
+      thinking,
+      toolCalls: toolItems.map((tc, i) => ({
+        id: responsesToolUseId(tc, i), name: tc.name, arguments: tc.arguments
+      })).filter(tc => tc.id),
       stopReason: toolItems.length ? 'tool_calls' : (truncated ? 'length' : 'stop')
     };
+  }
+
+  if (json.usage || json.error) {
+    return { text: json.output_text || '', toolCalls: [], stopReason: json.status === 'incomplete' ? 'length' : 'stop' };
   }
 
   // Unexpected format — return empty rather than crash.
@@ -877,4 +1081,12 @@ function buildRequest(cfg) {
   };
 }
 
-module.exports = { callOpenAICompatible };
+module.exports = {
+  callOpenAICompatible,
+  _test: {
+    buildResponsesPayload,
+    buildResponsesInput,
+    parseResponse,
+    responsesToolUseId,
+  }
+};
