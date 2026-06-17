@@ -30,6 +30,7 @@ class AnalyticsEngine {
     this.sessionId = null;
     this.sessionStartTime = null;
     this._store = null;
+    this._saveTimer = null;
     this._load();
   }
 
@@ -68,7 +69,19 @@ class AnalyticsEngine {
     }
   }
 
+  // Debounced: accumulates in memory, writes to SQLite/disk at most every 3s.
   _save() {
+    if (this._saveTimer) return;
+    this._saveTimer = setTimeout(() => { this._saveTimer = null; this._doWrite(); }, 3000);
+  }
+
+  // Immediate flush — use for infrequent lifecycle calls (startSession, endSession).
+  _flushNow() {
+    if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
+    this._doWrite();
+  }
+
+  _doWrite() {
     if (this.store) {
       try { this.store.kvSet('analytics', this._store); return; }
       catch (e) { /* fall through to file */ }
@@ -80,6 +93,8 @@ class AnalyticsEngine {
       console.error('[analytics] save error:', e.message);
     }
   }
+
+  flush() { this._flushNow(); }
 
   // ---- public API (mirrors the original SQLite-based engine) ----
 
@@ -96,12 +111,16 @@ class AnalyticsEngine {
       end_time: null,
       total_requests: 0,
       total_input_tokens: 0,
+      total_context_input_tokens: 0,
+      total_billable_input_tokens: 0,
+      total_cache_read_input_tokens: 0,
+      total_cache_creation_input_tokens: 0,
       total_output_tokens: 0,
       total_cost_nano_usd: 0,
       total_tokens_saved: 0,
       compression_enabled: 1,
     };
-    this._save();
+    this._flushNow();
     return this.sessionId;
   }
 
@@ -115,6 +134,9 @@ class AnalyticsEngine {
       inputTokens = 0,
       outputTokens = 0,
       cachedTokens = 0,
+      cacheCreationInputTokens = 0,
+      billableInputTokens = null,
+      totalInputTokens = null,
       costNanoUsd = 0,
       compressionMode = 'none',
       originalTokenCount = null,
@@ -137,6 +159,9 @@ class AnalyticsEngine {
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       cached_tokens: cachedTokens,
+      cache_creation_input_tokens: cacheCreationInputTokens,
+      billable_input_tokens: billableInputTokens == null ? inputTokens + cachedTokens + cacheCreationInputTokens : billableInputTokens,
+      total_input_tokens: totalInputTokens == null ? inputTokens + cachedTokens + cacheCreationInputTokens : totalInputTokens,
       cost_nano_usd: costNanoUsd,
       compression_mode: compressionMode,
       original_token_count: originalCount,
@@ -157,6 +182,10 @@ class AnalyticsEngine {
     if (sess) {
       sess.total_requests += 1;
       sess.total_input_tokens += inputTokens;
+      sess.total_context_input_tokens = (sess.total_context_input_tokens || 0) + row.total_input_tokens;
+      sess.total_billable_input_tokens = (sess.total_billable_input_tokens || 0) + row.billable_input_tokens;
+      sess.total_cache_read_input_tokens = (sess.total_cache_read_input_tokens || 0) + cachedTokens;
+      sess.total_cache_creation_input_tokens = (sess.total_cache_creation_input_tokens || 0) + cacheCreationInputTokens;
       sess.total_output_tokens += outputTokens;
       sess.total_cost_nano_usd += costNanoUsd;
       sess.total_tokens_saved += tokensSaved;
@@ -195,9 +224,10 @@ class AnalyticsEngine {
   /**
    * Get session statistics
    */
-  getSessionStats(sessionId = null) {
+  getSessionStats(sessionId = null, pricingCalc = null) {
     const sid = sessionId || this.sessionId;
-    return Promise.resolve(this._store.sessions[sid] || {});
+    const sess = this._store.sessions[sid] || {};
+    return Promise.resolve(this._recalculateStatsFromLogs([sess], sid, pricingCalc));
   }
 
   /**
@@ -213,18 +243,22 @@ class AnalyticsEngine {
   /**
    * Get provider breakdown
    */
-  getProviderBreakdown(sessionId = null) {
+  getProviderBreakdown(sessionId = null, pricingCalc = null) {
     const logs = sessionId
       ? this._store.request_logs.filter(r => r.session_id === sessionId)
       : this._store.request_logs;
     const map = {};
     for (const r of logs) {
       const key = r.provider || 'unknown';
-      if (!map[key]) map[key] = { provider: key, request_count: 0, total_input: 0, total_output: 0, total_cost_nano: 0 };
+      if (!map[key]) map[key] = { provider: key, request_count: 0, total_input: 0, total_context_input: 0, total_billable_input: 0, total_cache_read_input: 0, total_cache_creation_input: 0, total_output: 0, total_cost_nano: 0 };
       map[key].request_count += 1;
-      map[key].total_input += r.input_tokens;
-      map[key].total_output += r.output_tokens;
-      map[key].total_cost_nano += r.cost_nano_usd;
+      map[key].total_input += r.input_tokens || 0;
+      map[key].total_context_input += r.total_input_tokens || ((r.input_tokens || 0) + (r.cached_tokens || 0) + (r.cache_creation_input_tokens || 0));
+      map[key].total_billable_input += r.billable_input_tokens || ((r.input_tokens || 0) + (r.cached_tokens || 0) + (r.cache_creation_input_tokens || 0));
+      map[key].total_cache_read_input += r.cached_tokens || 0;
+      map[key].total_cache_creation_input += r.cache_creation_input_tokens || 0;
+      map[key].total_output += r.output_tokens || 0;
+      map[key].total_cost_nano += (r.cost_nano_usd || this._estimatedCostNano(pricingCalc, r));
     }
     const rows = Object.values(map).sort((a, b) => b.total_cost_nano - a.total_cost_nano);
     return Promise.resolve(rows);
@@ -233,21 +267,57 @@ class AnalyticsEngine {
   /**
    * Get model breakdown
    */
-  getModelBreakdown(sessionId = null) {
+  getModelBreakdown(sessionId = null, pricingCalc = null) {
     const logs = sessionId
       ? this._store.request_logs.filter(r => r.session_id === sessionId)
       : this._store.request_logs;
     const map = {};
     for (const r of logs) {
       const key = r.model || 'unknown';
-      if (!map[key]) map[key] = { model: key, request_count: 0, total_input: 0, total_output: 0, total_cost_nano: 0, tokens_saved: 0 };
-      map[key].request_count += 1;
-      map[key].total_input += r.input_tokens;
-      map[key].total_output += r.output_tokens;
-      map[key].total_cost_nano += r.cost_nano_usd;
-      map[key].tokens_saved += (r.original_token_count - r.compressed_token_count);
+      if (!map[key]) map[key] = {
+        model: key, provider: r.provider || 'unknown', request_count: 0, success_count: 0, error_count: 0,
+        total_input: 0, total_context_input: 0, total_billable_input: 0, total_cache_read_input: 0,
+        total_cache_creation_input: 0, total_output: 0, total_cost_nano: 0, tokens_saved: 0,
+        total_response_time_ms: 0, min_response_time_ms: 0, max_response_time_ms: 0, latest_response_time_ms: 0,
+        latest_at: 0, cache_hit_count: 0, estimated_usage_count: 0, estimated_pricing_count: 0,
+        compression_modes: {}
+      };
+      const row = map[key];
+      row.request_count += 1;
+      if (String(r.status || '').includes('error') || String(r.status || '') === 'failed') row.error_count += 1;
+      else row.success_count += 1;
+      row.total_input += r.input_tokens || 0;
+      row.total_context_input += r.total_input_tokens || ((r.input_tokens || 0) + (r.cached_tokens || 0) + (r.cache_creation_input_tokens || 0));
+      row.total_billable_input += r.billable_input_tokens || ((r.input_tokens || 0) + (r.cached_tokens || 0) + (r.cache_creation_input_tokens || 0));
+      row.total_cache_read_input += r.cached_tokens || 0;
+      row.total_cache_creation_input += r.cache_creation_input_tokens || 0;
+      row.total_output += r.output_tokens || 0;
+      row.total_cost_nano += (r.cost_nano_usd || this._estimatedCostNano(pricingCalc, r));
+      row.tokens_saved += Math.max(0, (r.original_token_count || 0) - (r.compressed_token_count || 0));
+      const ms = Math.max(0, Number(r.response_time_ms) || 0);
+      if (ms) {
+        row.total_response_time_ms += ms;
+        row.min_response_time_ms = row.min_response_time_ms ? Math.min(row.min_response_time_ms, ms) : ms;
+        row.max_response_time_ms = Math.max(row.max_response_time_ms || 0, ms);
+      }
+      if ((r.timestamp || 0) >= (row.latest_at || 0)) {
+        row.latest_at = r.timestamp || 0;
+        row.latest_response_time_ms = ms;
+        if (r.provider && r.provider !== 'cache') row.provider = r.provider;
+      }
+      if (r.status === 'cache_hit' || r.compression_mode === 'response-cache') row.cache_hit_count += 1;
+      if (r.upstream?.usageEstimated) row.estimated_usage_count += 1;
+      if (r.upstream?.pricingEstimated) row.estimated_pricing_count += 1;
+      const mode = r.compression_mode || 'none';
+      row.compression_modes[mode] = (row.compression_modes[mode] || 0) + 1;
     }
-    const rows = Object.values(map).sort((a, b) => b.total_cost_nano - a.total_cost_nano);
+    const rows = Object.values(map).map(row => ({
+      ...row,
+      avg_response_time_ms: row.request_count ? Math.round(row.total_response_time_ms / row.request_count) : 0,
+      error_rate: row.request_count ? Number((row.error_count / row.request_count).toFixed(3)) : 0,
+      cache_hit_rate: row.request_count ? Number((row.cache_hit_count / row.request_count).toFixed(3)) : 0,
+      tokens_per_request: row.request_count ? Math.round((row.total_context_input + row.total_output) / row.request_count) : 0,
+    })).sort((a, b) => b.total_cost_nano - a.total_cost_nano);
     return Promise.resolve(rows);
   }
 
@@ -263,35 +333,79 @@ class AnalyticsEngine {
       const key = r.compression_mode || 'none';
       if (!map[key]) map[key] = { compression_mode: key, request_count: 0, original_tokens: 0, compressed_tokens: 0, tokens_saved: 0 };
       map[key].request_count += 1;
-      map[key].original_tokens += r.original_token_count;
-      map[key].compressed_tokens += r.compressed_token_count;
-      map[key].tokens_saved += (r.original_token_count - r.compressed_token_count);
+      map[key].original_tokens += r.original_token_count || 0;
+      map[key].compressed_tokens += r.compressed_token_count || 0;
+      map[key].tokens_saved += Math.max(0, (r.original_token_count || 0) - (r.compressed_token_count || 0));
     }
     const rows = Object.values(map).sort((a, b) => b.tokens_saved - a.tokens_saved);
     return Promise.resolve(rows);
   }
 
-  /**
-   * Get lifetime statistics across all sessions
-   */
-  getLifetimeStats() {
-    const sessions = Object.values(this._store.sessions);
+  _estimatedCostNano(pricingCalc, r) {
+    if (!pricingCalc) return 0;
+    const input = Math.max(0, Number(r.input_tokens) || 0);
+    const output = Math.max(0, Number(r.output_tokens) || 0);
+    const cachedTokens = Math.max(0, Number(r.cached_tokens) || 0);
+    const cacheCreationTokens = Math.max(0, Number(r.cache_creation_input_tokens) || 0);
+    if (input + output + cachedTokens + cacheCreationTokens <= 0) return 0;
+    return pricingCalc.calculateCostNano(input, output, r.model || 'unknown', { cachedTokens, cacheCreationTokens })?.cost_nano_usd || 0;
+  }
+
+  _recalculateStatsFromLogs(sessions, sessionId = null, pricingCalc = null) {
+    const logs = sessionId
+      ? this._store.request_logs.filter(r => r.session_id === sessionId)
+      : this._store.request_logs;
     const result = {
-      total_sessions: sessions.length,
-      total_requests: 0,
+      total_sessions: sessions.filter(Boolean).length,
+      total_requests: logs.length,
       total_input_tokens: 0,
+      total_context_input_tokens: 0,
+      total_billable_input_tokens: 0,
+      total_cache_read_input_tokens: 0,
+      total_cache_creation_input_tokens: 0,
       total_output_tokens: 0,
       total_cost_nano_usd: 0,
       total_tokens_saved: 0,
+      estimated_usage_requests: 0,
+      estimated_pricing_requests: 0,
     };
-    for (const s of sessions) {
-      result.total_requests += s.total_requests || 0;
-      result.total_input_tokens += s.total_input_tokens || 0;
-      result.total_output_tokens += s.total_output_tokens || 0;
-      result.total_cost_nano_usd += s.total_cost_nano_usd || 0;
-      result.total_tokens_saved += s.total_tokens_saved || 0;
+    for (const r of logs) {
+      const uncachedInput = r.input_tokens || 0;
+      const cacheReadInput = r.cached_tokens || 0;
+      const cacheCreationInput = r.cache_creation_input_tokens || 0;
+      result.total_input_tokens += uncachedInput;
+      result.total_context_input_tokens += r.total_input_tokens || (uncachedInput + cacheReadInput + cacheCreationInput);
+      result.total_billable_input_tokens += r.billable_input_tokens || (uncachedInput + cacheReadInput + cacheCreationInput);
+      result.total_cache_read_input_tokens += cacheReadInput;
+      result.total_cache_creation_input_tokens += cacheCreationInput;
+      result.total_output_tokens += r.output_tokens || 0;
+      const actualCost = r.cost_nano_usd || 0;
+      const estimatedCost = actualCost || this._estimatedCostNano(pricingCalc, r);
+      result.total_cost_nano_usd += estimatedCost;
+      result.total_tokens_saved += Math.max(0, (r.original_token_count || 0) - (r.compressed_token_count || 0));
+      if (r.upstream?.usageEstimated) result.estimated_usage_requests += 1;
+      if (r.upstream?.pricingEstimated || (!actualCost && estimatedCost)) result.estimated_pricing_requests += 1;
     }
-    return Promise.resolve(result);
+    if (logs.length === 0 && sessions.length === 1 && sessions[0]) {
+      const s = sessions[0];
+      result.total_requests = s.total_requests || 0;
+      result.total_input_tokens = s.total_input_tokens || 0;
+      result.total_context_input_tokens = s.total_context_input_tokens || result.total_input_tokens;
+      result.total_billable_input_tokens = s.total_billable_input_tokens || result.total_context_input_tokens;
+      result.total_cache_read_input_tokens = s.total_cache_read_input_tokens || 0;
+      result.total_cache_creation_input_tokens = s.total_cache_creation_input_tokens || 0;
+      result.total_output_tokens = s.total_output_tokens || 0;
+      result.total_cost_nano_usd = s.total_cost_nano_usd || 0;
+      result.total_tokens_saved = s.total_tokens_saved || 0;
+    }
+    return result;
+  }
+
+  /**
+   * Get lifetime statistics across all sessions
+   */
+  getLifetimeStats(pricingCalc = null) {
+    return Promise.resolve(this._recalculateStatsFromLogs(Object.values(this._store.sessions), null, pricingCalc));
   }
 
   /**
@@ -313,15 +427,45 @@ class AnalyticsEngine {
     const sess = this._store.sessions[sid];
     if (sess) {
       sess.end_time = Date.now();
-      this._save();
+      this._flushNow();
     }
     return Promise.resolve();
   }
 
+  backfillMissingUsageAndCost({ pricingCalc, defaultProvider = 'azure', defaultModel = 'unknown' } = {}) {
+    if (!pricingCalc) return { updated: 0 };
+    let updated = 0;
+    for (const r of this._store.request_logs) {
+      const original = r.original_token_count || 0;
+      const compressed = r.compressed_token_count || 0;
+      let input = Math.max(0, Number(r.input_tokens) || 0);
+      let output = Math.max(0, Number(r.output_tokens) || 0);
+      let changed = false;
+
+      if (input === 0 && original > output) {
+        input = Math.max(0, compressed - output, original - Math.max(0, original - compressed) - output);
+        r.input_tokens = input;
+        changed = true;
+      }
+      if ((r.cost_nano_usd || 0) === 0 && (input + output) > 0) {
+        const cost = pricingCalc.calculateCostNano(input, output, r.model || defaultModel);
+        r.cost_nano_usd = cost?.cost_nano_usd || 0;
+        r.upstream = { ...(r.upstream || {}), usageEstimated: true, pricingEstimated: !!cost?.pricing_estimated };
+        changed = true;
+      }
+      if (!r.provider) { r.provider = defaultProvider; changed = true; }
+      if (!r.model) { r.model = defaultModel; changed = true; }
+      if (changed) updated++;
+    }
+    if (updated) this._flushNow();
+    return { updated };
+  }
+
   /**
-   * Close (no-op for file-based storage; kept for API compatibility)
+   * Close — flush any pending write, then resolve.
    */
   close() {
+    this._flushNow();
     return Promise.resolve();
   }
 }
