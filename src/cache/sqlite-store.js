@@ -49,6 +49,10 @@ class SqliteStore {
         this.db = new DatabaseSync(this.dbFile);
         this.db.exec(`
           PRAGMA journal_mode = WAL;
+          PRAGMA synchronous = NORMAL;
+          PRAGMA temp_store = MEMORY;
+          PRAGMA mmap_size = 268435456;
+          PRAGMA cache_size = -20000;
           CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
           CREATE TABLE IF NOT EXISTS response_cache (
             key          TEXT PRIMARY KEY,
@@ -64,6 +68,16 @@ class SqliteStore {
           );
           CREATE INDEX IF NOT EXISTS idx_cache_expires ON response_cache(expires_at);
         `);
+        for (const ddl of [
+          'ALTER TABLE response_cache ADD COLUMN stream INTEGER DEFAULT 0',
+          'ALTER TABLE response_cache ADD COLUMN bytes INTEGER DEFAULT 0',
+          'ALTER TABLE response_cache ADD COLUMN last_hit_at INTEGER DEFAULT 0',
+        ]) { try { this.db.exec(ddl); } catch {} }
+        this._cacheGetStmt = this.db.prepare('SELECT body, content_type, input_tokens, output_tokens, provider, model, expires_at FROM response_cache WHERE key = ?');
+        this._cacheHitStmt = this.db.prepare('UPDATE response_cache SET hits = hits + 1, last_hit_at = ? WHERE key = ?');
+        this._cacheDeleteStmt = this.db.prepare('DELETE FROM response_cache WHERE key = ?');
+        this._kvGetStmt = this.db.prepare('SELECT v FROM kv WHERE k = ?');
+        this._kvSetStmt = this.db.prepare('INSERT INTO kv(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v');
         this.backend = 'sqlite';
         return;
       } catch (e) {
@@ -83,13 +97,19 @@ class SqliteStore {
   isSqlite() { return this.backend === 'sqlite'; }
   info()     { return { backend: this.backend, dbFile: this.backend === 'sqlite' ? this.dbFile : JSON_FALLBACK }; }
 
-  _saveJson() { try { fs.writeFileSync(JSON_FALLBACK, JSON.stringify(this._mem)); } catch {} }
+  _saveJson() {
+    if (this._jsonSaveTimer) return;
+    this._jsonSaveTimer = setTimeout(() => {
+      this._jsonSaveTimer = null;
+      try { fs.writeFile(JSON_FALLBACK, JSON.stringify(this._mem), () => {}); } catch {}
+    }, 100);
+  }
 
   // ---- generic key/value (analytics persistence) ----
   kvGet(key) {
     if (this.backend === 'sqlite') {
       try {
-        const row = this.db.prepare('SELECT v FROM kv WHERE k = ?').get(key);
+        const row = this._kvGetStmt.get(key);
         return row ? JSON.parse(row.v) : null;
       } catch { return null; }
     }
@@ -99,7 +119,7 @@ class SqliteStore {
     const s = JSON.stringify(value);
     if (this.backend === 'sqlite') {
       try {
-        this.db.prepare('INSERT INTO kv(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').run(key, s);
+        this._kvSetStmt.run(key, s);
       } catch {}
     } else {
       this._mem.kv[key] = value;
@@ -112,18 +132,20 @@ class SqliteStore {
     const now = Date.now();
     if (this.backend === 'sqlite') {
       try {
-        const row = this.db.prepare('SELECT * FROM response_cache WHERE key = ?').get(key);
+        const row = this._cacheGetStmt.get(key);
         if (!row) return null;
         if (row.expires_at && row.expires_at < now) {
-          this.db.prepare('DELETE FROM response_cache WHERE key = ?').run(key);
+          this._cacheDeleteStmt.run(key);
           return null;
         }
-        this.db.prepare('UPDATE response_cache SET hits = hits + 1 WHERE key = ?').run(key);
+        this._cacheHitStmt.run(now, key);
         return {
           body: Buffer.from(row.body),
           contentType: row.content_type,
           inputTokens: row.input_tokens,
           outputTokens: row.output_tokens,
+          provider: row.provider,
+          model: row.model,
         };
       } catch { return null; }
     }
@@ -136,22 +158,24 @@ class SqliteStore {
       contentType: e.contentType,
       inputTokens: e.inputTokens,
       outputTokens: e.outputTokens,
+      provider: e.provider,
+      model: e.model,
     };
   }
 
-  cacheSet(key, { body, contentType, inputTokens = 0, outputTokens = 0, ttlMs = 0, provider = '', model = '' }) {
+  cacheSet(key, { body, contentType, inputTokens = 0, outputTokens = 0, ttlMs = 0, provider = '', model = '', stream = false }) {
     const now = Date.now();
     const expiresAt = ttlMs > 0 ? now + ttlMs : 0;
     const buf = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
     if (this.backend === 'sqlite') {
       try {
-        this.db.prepare(`INSERT INTO response_cache(key, provider, model, body, content_type, input_tokens, output_tokens, created_at, expires_at, hits)
-          VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-          ON CONFLICT(key) DO UPDATE SET body = excluded.body, created_at = excluded.created_at, expires_at = excluded.expires_at, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens`)
-          .run(key, provider, model, buf, contentType || '', inputTokens, outputTokens, now, expiresAt);
+        this.db.prepare(`INSERT INTO response_cache(key, provider, model, body, content_type, input_tokens, output_tokens, created_at, expires_at, hits, stream, bytes, last_hit_at)
+          VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0)
+          ON CONFLICT(key) DO UPDATE SET body = excluded.body, content_type = excluded.content_type, created_at = excluded.created_at, expires_at = excluded.expires_at, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, stream = excluded.stream, bytes = excluded.bytes`)
+          .run(key, provider, model, buf, contentType || '', inputTokens, outputTokens, now, expiresAt, stream ? 1 : 0, buf.length);
       } catch {}
     } else {
-      this._mem.cache[key] = { bodyB64: buf.toString('base64'), contentType, inputTokens, outputTokens, createdAt: now, expiresAt, hits: 0 };
+      this._mem.cache[key] = { bodyB64: buf.toString('base64'), contentType, inputTokens, outputTokens, provider, model, stream: !!stream, bytes: buf.length, createdAt: now, expiresAt, hits: 0, lastHitAt: 0 };
       const keys = Object.keys(this._mem.cache);
       if (keys.length > FALLBACK_MAX_CACHE) delete this._mem.cache[keys[0]];
       this._saveJson();
@@ -161,16 +185,44 @@ class SqliteStore {
   cacheStats() {
     if (this.backend === 'sqlite') {
       try {
-        const r = this.db.prepare('SELECT COUNT(*) n, COALESCE(SUM(hits),0) hits, COALESCE(SUM(input_tokens + output_tokens),0) toks FROM response_cache').get();
-        return { entries: r.n, hits: r.hits, cachedTokens: r.toks };
-      } catch { return { entries: 0, hits: 0, cachedTokens: 0 }; }
+        const r = this.db.prepare('SELECT COUNT(*) n, COALESCE(SUM(hits),0) hits, COALESCE(SUM(input_tokens + output_tokens),0) toks, COALESCE(SUM((input_tokens + output_tokens) * hits),0) served, COALESCE(SUM(CASE WHEN hits = 0 THEN input_tokens + output_tokens ELSE 0 END),0) stored_unserved FROM response_cache').get();
+        return { entries: r.n, hits: r.hits, cachedTokens: r.toks, servedTokens: r.served, storedUnservedTokens: r.stored_unserved };
+      } catch { return { entries: 0, hits: 0, cachedTokens: 0, servedTokens: 0, storedUnservedTokens: 0 }; }
     }
     const vals = Object.values(this._mem.cache);
     return {
       entries: vals.length,
       hits: vals.reduce((s, e) => s + (e.hits || 0), 0),
       cachedTokens: vals.reduce((s, e) => s + ((e.inputTokens || 0) + (e.outputTokens || 0)), 0),
+      servedTokens: vals.reduce((s, e) => s + (((e.inputTokens || 0) + (e.outputTokens || 0)) * (e.hits || 0)), 0),
+      storedUnservedTokens: vals.reduce((s, e) => s + ((e.hits || 0) === 0 ? ((e.inputTokens || 0) + (e.outputTokens || 0)) : 0), 0),
     };
+  }
+
+  cacheBackfillTokens({ inputTokens = 0, outputTokens = 0, provider = '', model = '' } = {}) {
+    inputTokens = Math.max(0, Number(inputTokens) || 0);
+    outputTokens = Math.max(0, Number(outputTokens) || 0);
+    if (inputTokens + outputTokens <= 0) return 0;
+    if (this.backend === 'sqlite') {
+      try {
+        const r = this.db.prepare(`UPDATE response_cache
+          SET input_tokens = ?, output_tokens = ?, provider = COALESCE(NULLIF(provider, ''), ?), model = COALESCE(NULLIF(model, ''), ?)
+          WHERE COALESCE(input_tokens,0) + COALESCE(output_tokens,0) = 0`).run(inputTokens, outputTokens, provider, model);
+        return r.changes || 0;
+      } catch { return 0; }
+    }
+    let n = 0;
+    for (const e of Object.values(this._mem.cache)) {
+      if (((e.inputTokens || 0) + (e.outputTokens || 0)) === 0) {
+        e.inputTokens = inputTokens;
+        e.outputTokens = outputTokens;
+        if (!e.provider) e.provider = provider;
+        if (!e.model) e.model = model;
+        n++;
+      }
+    }
+    if (n) this._saveJson();
+    return n;
   }
 
   cachePrune() {

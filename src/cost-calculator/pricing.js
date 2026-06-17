@@ -4,6 +4,13 @@
  * Updated: June 2026
  */
 
+const UNKNOWN_MODEL_FALLBACK = Object.freeze({
+  input: 3.00,
+  output: 15.00,
+  cached_input: 0.30,
+  estimated: true,
+});
+
 const PRICING_MODELS = {
   // OpenAI - GPT-4o series
   'gpt-4o': {
@@ -35,6 +42,62 @@ const PRICING_MODELS = {
   },
 
   // Anthropic - Claude series
+  'claude-fable-5': {
+    input: 10.00,
+    output: 50.00,
+    cached_input: 1.00,
+    cache_write_5m: 12.50,
+    cache_write_1h: 20.00,
+  },
+  'claude-opus-4': {
+    input: 5.00,
+    output: 25.00,
+    cached_input: 0.50,
+    cache_write_5m: 6.25,
+    cache_write_1h: 10.00,
+  },
+  'claude-opus-4-8': {
+    input: 5.00,
+    output: 25.00,
+    cached_input: 0.50,
+    cache_write_5m: 6.25,
+    cache_write_1h: 10.00,
+  },
+  'claude-opus-4-7': {
+    input: 5.00,
+    output: 25.00,
+    cached_input: 0.50,
+    cache_write_5m: 6.25,
+    cache_write_1h: 10.00,
+  },
+  'claude-opus-4-6': {
+    input: 5.00,
+    output: 25.00,
+    cached_input: 0.50,
+    cache_write_5m: 6.25,
+    cache_write_1h: 10.00,
+  },
+  'claude-sonnet-4': {
+    input: 3.00,
+    output: 15.00,
+    cached_input: 0.30,
+    cache_write_5m: 3.75,
+    cache_write_1h: 6.00,
+  },
+  'claude-sonnet-4-6': {
+    input: 3.00,
+    output: 15.00,
+    cached_input: 0.30,
+    cache_write_5m: 3.75,
+    cache_write_1h: 6.00,
+  },
+  'claude-haiku-4-5': {
+    input: 1.00,
+    output: 5.00,
+    cached_input: 0.10,
+    cache_write_5m: 1.25,
+    cache_write_1h: 2.00,
+  },
   'claude-3-5-sonnet': {
     input: 3.00,
     output: 15.00,
@@ -96,6 +159,48 @@ const PRICING_MODELS = {
   },
 
   // AWS Bedrock (Claude via Bedrock)
+  'us.anthropic.claude-opus-4': {
+    input: 5.00,
+    output: 25.00,
+    cached_input: 0.50,
+    cache_write_5m: 6.25,
+    cache_write_1h: 10.00,
+  },
+  'anthropic.claude-opus-4': {
+    input: 5.00,
+    output: 25.00,
+    cached_input: 0.50,
+    cache_write_5m: 6.25,
+    cache_write_1h: 10.00,
+  },
+  'us.anthropic.claude-sonnet-4': {
+    input: 3.00,
+    output: 15.00,
+    cached_input: 0.30,
+    cache_write_5m: 3.75,
+    cache_write_1h: 6.00,
+  },
+  'anthropic.claude-sonnet-4': {
+    input: 3.00,
+    output: 15.00,
+    cached_input: 0.30,
+    cache_write_5m: 3.75,
+    cache_write_1h: 6.00,
+  },
+  'us.anthropic.claude-haiku-4': {
+    input: 1.00,
+    output: 5.00,
+    cached_input: 0.10,
+    cache_write_5m: 1.25,
+    cache_write_1h: 2.00,
+  },
+  'anthropic.claude-haiku-4': {
+    input: 1.00,
+    output: 5.00,
+    cached_input: 0.10,
+    cache_write_5m: 1.25,
+    cache_write_1h: 2.00,
+  },
   'bedrock-claude-3-5-sonnet': {
     input: 3.00,
     output: 15.00,
@@ -160,40 +265,60 @@ class PricingCalculator {
       }
     }
 
-    // Wildcard fallback
+    // Family fallbacks for current/Foundry model names that often appear as
+    // deployments or aliases. Prefer conservative public-list pricing over zero.
+    const lower = String(modelName).toLowerCase();
+    if (lower.includes('gpt-4o-mini')) return this.models['gpt-4o-mini'];
+    if (lower.includes('gpt-4o')) return this.models['gpt-4o'];
+    if (lower.includes('gpt-4.1') || lower.includes('gpt-4-1')) return this.models['gpt-4o'];
+    if (lower.includes('gpt-5')) return this.models['gpt-4o'];
+    if (lower.includes('claude-opus')) return this.models['claude-opus-4-8'];
+    if (lower.includes('claude-sonnet')) return this.models['claude-sonnet-4-6'];
+    if (lower.includes('claude-haiku')) return this.models['claude-haiku-4-5'];
+
     return null;
+  }
+
+  fallbackPricing(_modelName) {
+    return UNKNOWN_MODEL_FALLBACK;
   }
 
   /**
    * Calculate cost in nanoUSD (10^-9 USD) for atomic precision
    */
   calculateCostNano(inputTokens, outputTokens, modelName, options = {}) {
-    const { cachedTokens = 0, isLongContext = false } = options;
+    const { isLongContext = false, cacheCreationTokens = 0, cacheTtl = '5m' } = options;
+    inputTokens = Math.max(0, Number(inputTokens) || 0);
+    outputTokens = Math.max(0, Number(outputTokens) || 0);
+    const cachedTokens = Math.min(inputTokens, Math.max(0, Number(options.cachedTokens) || 0));
+    const creationTokens = Math.max(0, Number(cacheCreationTokens) || 0);
 
-    const pricing = this.findModelPricing(modelName);
-    if (!pricing) {
-      return { error: `Model pricing not found: ${modelName}` };
-    }
+    let pricing = this.findModelPricing(modelName);
+    const estimatedPricing = !pricing;
+    if (!pricing) pricing = this.fallbackPricing(modelName);
 
-    let costUsd = 0;
+    const uncachedInput = Math.max(0, inputTokens - cachedTokens);
+    const cachedRate = pricing.cached_input || pricing.input * 0.1;
+    const writeRate = cacheTtl === '1h'
+      ? (pricing.cache_write_1h || pricing.input * 2)
+      : (pricing.cache_write_5m || pricing.input * 1.25);
+    const outputRate = pricing.output;
+    let inputCostUsd = 0;
 
-    if (isLongContext && pricing.long_context_threshold && inputTokens > pricing.long_context_threshold) {
-      // Long context tier
-      const uncachedInput = inputTokens - cachedTokens;
+    if (isLongContext && pricing.long_context_threshold && uncachedInput > pricing.long_context_threshold) {
       const longInput = uncachedInput - pricing.long_context_threshold;
       const shortInput = uncachedInput - longInput;
-
-      costUsd += (shortInput / 1e6) * pricing.input;
-      costUsd += (longInput / 1e6) * (pricing.long_input || pricing.input);
-      costUsd += (cachedTokens / 1e6) * (pricing.cached_input || pricing.input * 0.1);
-      costUsd += (outputTokens / 1e6) * (pricing.long_output || pricing.output);
+      inputCostUsd += (shortInput / 1e6) * pricing.input;
+      inputCostUsd += (longInput / 1e6) * (pricing.long_input || pricing.input);
     } else {
-      // Standard tier
-      const uncachedInput = inputTokens - cachedTokens;
-      costUsd += (uncachedInput / 1e6) * pricing.input;
-      costUsd += (cachedTokens / 1e6) * (pricing.cached_input || pricing.input * 0.1);
-      costUsd += (outputTokens / 1e6) * pricing.output;
+      inputCostUsd += (uncachedInput / 1e6) * pricing.input;
     }
+
+    const cachedCostUsd = (cachedTokens / 1e6) * cachedRate;
+    const promptCacheWriteUsd = (creationTokens / 1e6) * writeRate;
+    const outputCostUsd = (outputTokens / 1e6) * (isLongContext && pricing.long_output ? pricing.long_output : outputRate);
+    const costUsd = inputCostUsd + cachedCostUsd + promptCacheWriteUsd + outputCostUsd;
+    const promptCacheSavingsUsd = (cachedTokens / 1e6) * Math.max(0, pricing.input - cachedRate);
 
     // Convert to nanoUSD (avoid floating point precision issues)
     const costNano = Math.round(costUsd * 1e9);
@@ -201,10 +326,18 @@ class PricingCalculator {
     return {
       cost_usd: costUsd,
       cost_nano_usd: costNano,
+      prompt_cache_savings_nano: Math.round(promptCacheSavingsUsd * 1e9),
+      prompt_cache_write_nano: Math.round(promptCacheWriteUsd * 1e9),
+      pricing_known: !estimatedPricing,
+      pricing_estimated: estimatedPricing || !!pricing.estimated,
       breakdown: {
-        input_cost: (uncachedInput / 1e6) * pricing.input,
-        cached_cost: (cachedTokens / 1e6) * (pricing.cached_input || pricing.input * 0.1),
-        output_cost: (outputTokens / 1e6) * pricing.output,
+        input_cost: inputCostUsd,
+        cached_cost: cachedCostUsd,
+        prompt_cache_write_cost: promptCacheWriteUsd,
+        output_cost: outputCostUsd,
+        uncached_input_tokens: uncachedInput,
+        cached_input_tokens: cachedTokens,
+        cache_creation_input_tokens: creationTokens,
       },
     };
   }

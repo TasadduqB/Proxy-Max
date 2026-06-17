@@ -3,6 +3,20 @@
 // We sign requests with SigV4 (no AWS SDK dependency).
 
 const crypto = require('crypto');
+let _bedrockDispatcher = null;
+function getBedrockDispatcher() {
+  if (_bedrockDispatcher) return _bedrockDispatcher;
+  try {
+    const { Agent } = require('undici');
+    _bedrockDispatcher = new Agent({
+      keepAliveTimeout: 60000,
+      keepAliveMaxTimeout: 120000,
+      connections: Math.max(16, Number(process.env.PROXY_MAX_UPSTREAM_CONNECTIONS || 64)),
+      pipelining: 1,
+    });
+  } catch {}
+  return _bedrockDispatcher;
+}
 const {
   createAnthropicSSEEmitter,
   buildAnthropicResponse,
@@ -51,20 +65,26 @@ function sigv4Sign({ method, host, path, query = '', body, region, service, acce
   return headers;
 }
 
+function isModernClaudeModel(model) {
+  return /(claude-(fable-5|opus-4-[78])|anthropic\.claude-(fable-5|opus-4-[78]))/i.test(String(model || ''));
+}
+
 function buildBedrockPayload(body) {
   const payload = {
     anthropic_version: 'bedrock-2023-05-31',
     max_tokens: body.max_tokens || 4096,
     messages: body.messages,
     system: body.system,
-    temperature: body.temperature,
-    top_p: body.top_p,
+    ...(isModernClaudeModel(body.model || '') ? {} : { temperature: body.temperature, top_p: body.top_p }),
     stop_sequences: body.stop_sequences,
     tools: body.tools,
     tool_choice: body.tool_choice
   };
-  // Bedrock supports extended thinking natively.
-  if (body.thinking && body.thinking.type === 'enabled') payload.thinking = body.thinking;
+  // Bedrock supports Anthropic thinking on Claude models. Modern Claude IDs use
+  // adaptive thinking; legacy extended-thinking budgets are passed through only
+  // for older models that still accept them.
+  if (body.thinking && body.thinking.type === 'adaptive') payload.thinking = body.thinking;
+  else if (body.thinking && body.thinking.type === 'enabled' && !isModernClaudeModel(body.model || '')) payload.thinking = body.thinking;
   for (const k of Object.keys(payload)) if (payload[k] === undefined) delete payload[k];
   return payload;
 }
@@ -162,7 +182,8 @@ async function callBedrock(cfg, body, res) {
   });
   if (stream) headers.Accept = 'application/vnd.amazon.eventstream';
 
-  const upstream = await fetch(url, { method: 'POST', headers, body: payload });
+  const dispatcher = getBedrockDispatcher();
+  const upstream = await fetch(url, { method: 'POST', headers, body: payload, ...(dispatcher ? { dispatcher } : {}) });
   if (!upstream.ok) {
     const errText = await upstream.text();
     const err = new Error(`Bedrock ${upstream.status}: ${errText.slice(0, 600)}`);

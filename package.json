@@ -42,12 +42,12 @@
     "undici": "Auto-installed on first use if not present; the proxy falls back gracefully if it can't be installed."
   },
   "dependencies": {
-    "undici": "^8.4.1",
-    "js-tiktoken": "^1.0.13",
-    "toml": "^3.0.0"
+    "js-tiktoken": "^1.0.21",
+    "toml": "^4.1.1",
+    "undici": "^6.27.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.14"
   },
   "engines": {
     "node": ">=18"
