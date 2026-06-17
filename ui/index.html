@@ -1651,7 +1651,7 @@ function navTo(view) {
 
   clearInterval(_poolTimer); _poolTimer = null;
   clearInterval(_dashTimer); _dashTimer = null;
-  if (view === 'pool') { loadPool(); _poolTimer = setInterval(loadPool, 60000); }
+  if (view === 'pool') { loadPool(); poolProviderChanged(); _poolTimer = setInterval(loadPool, 60000); }
   if (view === 'dashboard') { loadDashboard(); _dashTimer = setInterval(loadDashboard, 60000); }
 }
 document.addEventListener('click', e => {

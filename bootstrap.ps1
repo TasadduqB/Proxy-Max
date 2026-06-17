@@ -189,7 +189,7 @@ function Start-Proxy {
 
   if ($Insecure) { $env:PROXY_INSECURE = "1" } else { Remove-Item Env:PROXY_INSECURE -ErrorAction SilentlyContinue }
 
-  Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "$Here\src\server.js" `
+  Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "`"$Here\src\server.js`"" `
     -RedirectStandardOutput (Join-Path $ProxyHome "server.log") `
     -RedirectStandardError  (Join-Path $ProxyHome "server.err.log")
 

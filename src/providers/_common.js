@@ -341,6 +341,22 @@ function parseSimulatedTools(text) {
     } catch {}
   }
 
+  // Pattern 6: Incomplete JSON at start of text (when cut off by max_tokens)
+  if (tools.length === 0) {
+    const incompleteJsonRegex = /^\{\s*"name"\s*:\s*"([^"]+)"\s*(?:,\s*"(?:arguments|input|params)"\s*:\s*([\s\S]*))?$/;
+    match = incompleteJsonRegex.exec(text.trim());
+    if (match) {
+      tools.push({ name: match[1], arguments: match[2] || '{}' });
+    } else {
+      // Pattern 7: Incomplete markdown JSON
+      const incompleteMdRegex = /```(?:json)?\s*\{\s*"name"\s*:\s*"([^"]+)"\s*(?:,\s*"(?:arguments|input|params)"\s*:\s*([\s\S]*))?$/;
+      match = incompleteMdRegex.exec(text.trim());
+      if (match) {
+        tools.push({ name: match[1], arguments: match[2] || '{}' });
+      }
+    }
+  }
+
   return tools;
 }
 
@@ -448,7 +464,7 @@ function createAnthropicSSEEmitter(res, model) {
   let thinkingBlockOpen = false;
   let thinkingIndex = 0;
   // Tool blocks keyed by upstream tool_call index -> our content block index.
-  const toolBlocks = new Map();
+  let toolBlocks = new Map();
   let nextBlockIndex = 0;
   let inputTokens = 0;
   let outputTokens = 0;
@@ -612,14 +628,10 @@ function createAnthropicSSEEmitter(res, model) {
         index: blockIndex,
         id: tc.id || newId('toolu'),
         name: tc.function?.name || '',
-        argsBuf: ''
+        argsBuf: '',
+        started: false
       };
       toolBlocks.set(idx, block);
-      send('content_block_start', {
-        type: 'content_block_start',
-        index: blockIndex,
-        content_block: { type: 'tool_use', id: block.id, name: block.name, input: {} }
-      });
     }
     if (tc.function?.name && !block.name) block.name = tc.function.name;
     if (tc.function?.arguments) {
@@ -635,6 +647,14 @@ function createAnthropicSSEEmitter(res, model) {
         block.argsBuf += incoming;
       }
       if (chunk) {
+        if (!block.started) {
+          block.started = true;
+          send('content_block_start', {
+            type: 'content_block_start',
+            index: block.index,
+            content_block: { type: 'tool_use', id: block.id, name: block.name, input: {} }
+          });
+        }
         send('content_block_delta', {
           type: 'content_block_delta',
           index: block.index,
@@ -729,7 +749,21 @@ function createAnthropicSSEEmitter(res, model) {
       }
     }
 
-    for (const block of toolBlocks.values()) {
+    const activeToolBlocks = new Map();
+    for (const [idx, block] of toolBlocks.entries()) {
+      if (!block.started && stopReason === 'max_tokens') {
+        continue;
+      }
+      if (!block.started) {
+        block.started = true;
+        send('content_block_start', {
+          type: 'content_block_start',
+          index: block.index,
+          content_block: { type: 'tool_use', id: block.id, name: block.name, input: {} }
+        });
+      }
+      activeToolBlocks.set(idx, block);
+
       if (block.argsBuf !== undefined) {
         const suffix = getJSONRepairSuffix(block.argsBuf);
         if (suffix) {
@@ -742,6 +776,7 @@ function createAnthropicSSEEmitter(res, model) {
       }
       send('content_block_stop', { type: 'content_block_stop', index: block.index });
     }
+    toolBlocks = activeToolBlocks;
     if (toolBlocks.size > 0) stopReason = 'tool_use';
 
     // Ensure at least one text content block exists so Claude Code's Stop hook
