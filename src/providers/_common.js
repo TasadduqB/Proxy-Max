@@ -482,7 +482,19 @@ function getJSONRepairSuffix(str) {
 }
 
 // Build an SSE writer that emits canonical Anthropic events.
-function createAnthropicSSEEmitter(res, model) {
+// toolDefs: the Anthropic tools array from the original request body, used to
+// validate that tool call inputs satisfy required parameters before forwarding.
+function createAnthropicSSEEmitter(res, model, toolDefs = []) {
+  // Map tool_name → Set of required parameter names (from input_schema.required).
+  // Used to skip tool calls whose args are {} when required params are present.
+  const toolRequiredParams = new Map();
+  for (const t of Array.isArray(toolDefs) ? toolDefs : []) {
+    const name = t.name || t.type;
+    if (name && Array.isArray(t.input_schema?.required) && t.input_schema.required.length > 0) {
+      toolRequiredParams.set(name, new Set(t.input_schema.required));
+    }
+  }
+
   const messageId = newId('msg');
   let started = false;
   let textBlockOpen = false;
@@ -792,19 +804,27 @@ function createAnthropicSSEEmitter(res, model) {
           }
           finalArgs = rawArgs + suffix;
         }
-        // Skip tool calls where repair still yields {} — rawArgs was non-empty
-        // (model started the object) but all content was lost to truncation.
-        // Forwarding would cause InputValidationError for required-parameter tools.
-        if (rawArgs !== '{}') {
-          try {
-            if (Object.keys(JSON.parse(finalArgs)).length === 0) {
-              console.warn(`[proxy] [stream-repair] skipping ${block.name} — args truncated beyond recovery (${rawArgs.length} raw chars)`);
+        // Skip tool calls that would cause InputValidationError in Claude Code.
+        // Two cases:
+        //   (a) truncated: rawArgs was non-empty but repair still yields {} — all
+        //       parameter content was lost (max_tokens cut off the object mid-write).
+        //   (b) stub/empty: model generated exactly {} but the tool schema declares
+        //       required parameters — a placeholder call that should be retried.
+        try {
+          const parsed = JSON.parse(finalArgs);
+          if (Object.keys(parsed).length === 0) {
+            const required = toolRequiredParams.get(block.name);
+            const hasRequired = required && required.size > 0;
+            const isTruncated = rawArgs !== '{}'; // non-trivial bytes arrived then lost
+            if (isTruncated || hasRequired) {
+              const reason = isTruncated ? 'truncated' : 'missing-required';
+              console.warn(`[proxy] [stream-repair] skipping ${block.name} — ${reason} (${rawArgs.length} raw chars)`);
               if (!res._toolRepairs) res._toolRepairs = [];
-              res._toolRepairs.push({ tool: block.name, status: 'skipped', rawLen: rawArgs.length, reason: 'truncated' });
+              res._toolRepairs.push({ tool: block.name, status: 'skipped', rawLen: rawArgs.length, reason });
               continue;
             }
-          } catch { /* invalid JSON — forward as-is, Claude Code will error */ }
-        }
+          }
+        } catch { /* invalid JSON — forward as-is, Claude Code will report the error */ }
 
         // Track repairs where the JSON was invalid but recoverable.
         if (rawArgs && finalArgs !== rawArgs) {
@@ -897,7 +917,16 @@ function createAnthropicSSEEmitter(res, model) {
 }
 
 // Build a non-stream Anthropic Messages response from accumulated parts.
-function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, usage, repairs = null }) {
+function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, usage, repairs = null, toolDefs = [] }) {
+  // Build required-params map from tool definitions (same logic as streaming emitter).
+  const toolRequiredParams = new Map();
+  for (const t of Array.isArray(toolDefs) ? toolDefs : []) {
+    const name = t.name || t.type;
+    if (name && Array.isArray(t.input_schema?.required) && t.input_schema.required.length > 0) {
+      toolRequiredParams.set(name, new Set(t.input_schema.required));
+    }
+  }
+
   const content = [];
   if (thinking) content.push({ type: 'thinking', thinking, signature: Buffer.from('proxy-max').toString('base64') });
   if (text) content.push({ type: 'text', text });
@@ -906,13 +935,17 @@ function buildAnthropicResponse({ model, text, thinking, toolCalls, stopReason, 
     const repairedStr = repairJSON(tc.arguments);
     let input = {};
     try { input = JSON.parse(repairedStr); } catch { input = {}; }
-    // If the model sent non-empty arguments but repair produced {} the JSON was
-    // unrecoverably truncated (max_tokens mid-value). Skip the tool call so
-    // Claude Code sees the max_tokens stop reason and retries gracefully instead
-    // of hitting InputValidationError: file_path/content missing.
-    if (rawArgs && rawArgs !== '{}' && Object.keys(input).length === 0) {
-      if (repairs) repairs.push({ tool: tc.name || '?', status: 'skipped', rawLen: rawArgs.length, reason: 'truncated' });
-      continue;
+    // Skip tool calls that would cause InputValidationError in Claude Code.
+    // (a) truncated beyond recovery: non-empty rawArgs but repair yields {}
+    // (b) stub/empty: model generated exactly {} for a tool with required params
+    if (Object.keys(input).length === 0) {
+      const isTruncated = rawArgs && rawArgs !== '{}';
+      const hasRequired = (toolRequiredParams.get(tc.name || '') || toolRequiredParams.get(tc.name || '?'))?.size > 0;
+      if (isTruncated || hasRequired) {
+        const reason = isTruncated ? 'truncated' : 'missing-required';
+        if (repairs) repairs.push({ tool: tc.name || '?', status: 'skipped', rawLen: rawArgs.length, reason });
+        continue;
+      }
     }
     // Track JSON repairs (args were invalid but recoverable).
     if (repairs && rawArgs && repairedStr !== rawArgs && Object.keys(input).length > 0) {

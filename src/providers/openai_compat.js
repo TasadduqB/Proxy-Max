@@ -711,7 +711,7 @@ async function callWithWebSearchLoop(providerCfg, sanitizedBody, originalBody, r
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    const emitter = createAnthropicSSEEmitter(res, requestedModel);
+    const emitter = createAnthropicSSEEmitter(res, requestedModel, originalBody.tools);
     emitter.start((lastJson && lastJson.usage) || {});
     if (lastThinking) emitter.deltaThinking(lastThinking);
     if (lastText)     emitter.deltaText(lastText);
@@ -731,6 +731,7 @@ async function callWithWebSearchLoop(providerCfg, sanitizedBody, originalBody, r
       stopReason: lastStopReason,
       usage: lastJson && lastJson.usage,
       repairs,
+      toolDefs: originalBody.tools,
     });
     if (repairs.length) res._toolRepairs = (res._toolRepairs || []).concat(repairs);
     res.setHeader('Content-Type', 'application/json');
@@ -797,7 +798,7 @@ async function callOpenAICompatible(providerCfg, body, res) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    const emitter = createAnthropicSSEEmitter(res, body._requestedModel || cfg.model);
+    const emitter = createAnthropicSSEEmitter(res, body._requestedModel || cfg.model, body.tools);
     try {
       if (isResponsesApi) {
         await streamResponsesApi(upstream, emitter, idleTimeoutMs);
@@ -852,6 +853,7 @@ async function callOpenAICompatible(providerCfg, body, res) {
     stopReason,
     usage: json.usage,
     repairs,
+    toolDefs: body.tools,
   });
   if (repairs.length) res._toolRepairs = (res._toolRepairs || []).concat(repairs);
   res.setHeader('Content-Type', 'application/json');
