@@ -429,33 +429,51 @@ function _jsonDepth(str) {
   };
 }
 
+// Escape unescaped control characters (code < 0x20) inside JSON string values.
+// Models sometimes embed literal newlines or tabs in content/file_path strings,
+// causing JSON.parse to fail with "unescaped control character" even when the
+// surrounding structure is otherwise valid (common with multi-line YAML content).
+function sanitizeControlChars(str) {
+  let result = '';
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const code = str.charCodeAt(i);
+    if (escape) { escape = false; result += ch; continue; }
+    if (ch === '\\' && inString) { escape = true; result += ch; continue; }
+    if (ch === '"') { inString = !inString; result += ch; continue; }
+    if (inString && code < 0x20) {
+      if      (code === 0x0A) result += '\\n';
+      else if (code === 0x0D) result += '\\r';
+      else if (code === 0x09) result += '\\t';
+      else                    result += '\\u' + code.toString(16).padStart(4, '0');
+      continue;
+    }
+    result += ch;
+  }
+  return result;
+}
+
 // Lightweight, zero-dependency heuristic JSON repair for LLM tool hallucinations.
 // Handles the common max_tokens truncation case: {"file_path":"x","content":"code...
 function repairJSON(str) {
   if (!str) return "{}";
   str = str.trim();
   if (str === "") return "{}";
-  try {
-    return JSON.stringify(JSON.parse(str));
-  } catch (e) {
-    let fixed = str;
-    // 1. Fix trailing commas before closing braces/brackets
-    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
-    const { openBraces, openBrackets, inString, escape } = _jsonDepth(fixed);
-    // 2. Close any open string.  If the last char was a backslash (escape=true)
-    //    appending '"' alone would produce '\"' (escaped quote, not a terminator).
-    //    Instead complete the escape as '\n' then close the string.
-    if (escape)       fixed += 'n"';
-    else if (inString) fixed += '"';
-    // 3. Append missing closing brackets/braces
-    for (let i = 0; i < openBrackets; i++) fixed += ']';
-    for (let i = 0; i < openBraces;   i++) fixed += '}';
-    try {
-      return JSON.stringify(JSON.parse(fixed));
-    } catch (e2) {
-      return "{}";
-    }
-  }
+  try { return JSON.stringify(JSON.parse(str)); } catch (e) {}
+  // Escape unescaped control characters before structural repair — models sometimes
+  // emit literal \n/\r/\t inside content strings (e.g. multi-line YAML content).
+  let fixed = sanitizeControlChars(str);
+  // Fix trailing commas before closing braces/brackets.
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+  const { openBraces, openBrackets, inString, escape } = _jsonDepth(fixed);
+  // Close any open string; complete a trailing backslash-escape before closing.
+  if (escape)        fixed += 'n"';
+  else if (inString) fixed += '"';
+  for (let i = 0; i < openBrackets; i++) fixed += ']';
+  for (let i = 0; i < openBraces;   i++) fixed += '}';
+  try { return JSON.stringify(JSON.parse(fixed)); } catch (e2) { return "{}"; }
 }
 
 // Computes only the missing closing suffix (braces, quotes, etc.) needed to repair JSON.
@@ -465,16 +483,16 @@ function getJSONRepairSuffix(str) {
   str = str.trim();
   if (str === "") return '';
   try { JSON.parse(str); return ''; } catch (e) { /* fall through */ }
-  let fixed = str;
+  let fixed = sanitizeControlChars(str);
   fixed = fixed.replace(/,\s*([}\]])/g, '$1');
   const { openBraces, openBrackets, inString, escape } = _jsonDepth(fixed);
   let suffix = '';
-  if (escape)        suffix += 'n"';   // complete \-escape then close string
+  if (escape)        suffix += 'n"';
   else if (inString) suffix += '"';
   for (let i = 0; i < openBrackets; i++) suffix += ']';
   for (let i = 0; i < openBraces;   i++) suffix += '}';
   try {
-    JSON.parse(fixed + suffix); // test against fixed (trailing commas removed)
+    JSON.parse(fixed + suffix);
     return suffix;
   } catch (e2) {
     return '';
@@ -792,17 +810,20 @@ function createAnthropicSSEEmitter(res, model, toolDefs = []) {
         let valid = false;
         try { JSON.parse(rawArgs); valid = true; } catch { /* fall through */ }
         if (!valid) {
-          let suffix = getJSONRepairSuffix(rawArgs);
-          if (!suffix && rawArgs.startsWith('{')) {
-            const { inString, escape, openBraces, openBrackets } = _jsonDepth(rawArgs);
+          // Sanitize unescaped control chars before structural repair — models can
+          // emit literal newlines/tabs inside content strings (e.g. multi-line YAML).
+          const cleanArgs = sanitizeControlChars(rawArgs);
+          let suffix = getJSONRepairSuffix(cleanArgs);
+          if (!suffix && cleanArgs.startsWith('{')) {
+            const { inString, escape, openBraces, openBrackets } = _jsonDepth(cleanArgs);
             let forced = '';
             if (escape)        forced += 'n"';
             else if (inString) forced += '"';
             for (let i = 0; i < openBrackets; i++) forced += ']';
             for (let i = 0; i < openBraces;   i++) forced += '}';
-            try { JSON.parse(rawArgs + forced); suffix = forced; } catch {}
+            try { JSON.parse(cleanArgs + forced); suffix = forced; } catch {}
           }
-          finalArgs = rawArgs + suffix;
+          finalArgs = cleanArgs + suffix;
         }
         // Skip tool calls that would cause InputValidationError in Claude Code.
         // Two cases:
