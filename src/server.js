@@ -1857,7 +1857,7 @@ function buildSystem() {
   const npmVer = npmPath ? probeVersion(npmPath) : null;
   const npm = { path: npmPath, version: npmVer, ok: !!npmPath };
 
-  const claudePath = installer.detectClaude();
+  const claudePath = installer.detectClaude(npmPath);
   const claudeVer = claudePath ? probeVersion(claudePath) : null;
   const claude = { path: claudePath, version: claudeVer, ok: !!claudePath };
 
@@ -1928,7 +1928,8 @@ function handleLaunchCommand(_req, res) {
   const port = parseInt(process.env.PORT || '8787', 10);
   const host = process.env.HOST || '127.0.0.1';
   const base = `http://${host}:${port}`;
-  const claudePath = installer.detectClaude();
+  const npmPath = installer.which('npm');
+  const claudePath = installer.detectClaude(npmPath);
   const claudeCmd  = claudePath || 'claude';
   const platform   = process.platform;
   const isWin      = platform === 'win32';
@@ -1939,9 +1940,13 @@ function handleLaunchCommand(_req, res) {
   const npmBinDir   = path.join(installer.NPM_PREFIX, isWin ? '' : 'bin');
   const portNodeDir = path.join(installer.NODE_DIR,   isWin ? '' : 'bin');
   const claudeDir   = claudePath ? path.dirname(claudePath) : null;
+  // Also include the system npm global bin so a custom-prefixed install is found.
+  const npmGlobalBinDir = npmPath ? installer.getNpmGlobalBinDir(npmPath) : null;
 
   // Deduplicate; always include so a fresh terminal with no custom PATH works.
-  const pathDirs = [...new Set([claudeDir, npmBinDir, portNodeDir, nodeBinDir].filter(Boolean))];
+  const pathDirs = [...new Set(
+    [claudeDir, npmGlobalBinDir, npmBinDir, portNodeDir, nodeBinDir].filter(Boolean)
+  )];
 
   const pathUnix = `export PATH="${pathDirs.join(':')}:$PATH"`;
   const pathPs   = `$env:PATH = "${pathDirs.join(';')};$env:PATH"`;
@@ -1955,20 +1960,42 @@ function handleLaunchCommand(_req, res) {
     `${claudeCmd} --dangerously-skip-permissions`,
   ].join('\n');
 
+  // Build the Windows PowerShell invocation.
+  // .cmd files: & 'path\claude.cmd' works directly in PS.
+  // .ps1 files: need -ExecutionPolicy Bypass to avoid unsigned-script blocks.
+  let psClaudeInvoke;
+  if (!claudePath) {
+    psClaudeInvoke = `claude --dangerously-skip-permissions`;
+  } else if (claudeCmd.toLowerCase().endsWith('.ps1')) {
+    psClaudeInvoke = `powershell.exe -ExecutionPolicy Bypass -File '${claudeCmd.replace(/'/g, "''")}' --dangerously-skip-permissions`;
+  } else {
+    psClaudeInvoke = `& '${claudeCmd.replace(/'/g, "''")}' --dangerously-skip-permissions`;
+  }
+
   const ps = [
     `$env:ANTHROPIC_BASE_URL = "${base}"`,
     `$env:ANTHROPIC_AUTH_TOKEN = "proxy-max"`,
     `$env:ANTHROPIC_API_KEY = "proxy-max"`,
     pathPs,
-    claudePath ? `& '${claudeCmd.replace(/'/g, "''")}' --dangerously-skip-permissions` : `claude --dangerously-skip-permissions`,
+    psClaudeInvoke,
   ].join('\n');
+
+  // cmd.exe — .ps1 needs a powershell wrapper; .cmd/.bat run directly.
+  let cmdClaudeInvoke;
+  if (!claudePath) {
+    cmdClaudeInvoke = `claude --dangerously-skip-permissions`;
+  } else if (claudeCmd.toLowerCase().endsWith('.ps1')) {
+    cmdClaudeInvoke = `powershell.exe -ExecutionPolicy Bypass -File "${claudeCmd}" --dangerously-skip-permissions`;
+  } else {
+    cmdClaudeInvoke = `"${claudeCmd}" --dangerously-skip-permissions`;
+  }
 
   const wincmd = [
     `set ANTHROPIC_BASE_URL=${base}`,
     `set ANTHROPIC_AUTH_TOKEN=proxy-max`,
     `set ANTHROPIC_API_KEY=proxy-max`,
     ...pathCmds,
-    `"${claudeCmd}" --dangerously-skip-permissions`,
+    cmdClaudeInvoke,
   ].join(' && ');
 
   send(res, 200, {

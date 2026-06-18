@@ -42,28 +42,57 @@ function which(cmd) {
     path.join(HOME, '.volta/bin'),
     path.join(HOME, '.fnm'),
     path.join(HOME, '.local/bin'),
-    path.join(HOME, 'AppData/Roaming/npm'),
-    path.join(HOME, 'AppData/Local/Programs/nodejs'),
+    // Windows — standard npm global (Roaming)
+    path.join(HOME, 'AppData', 'Roaming', 'npm'),
+    // Windows — alternative npm global (Local)
+    path.join(HOME, 'AppData', 'Local', 'npm'),
+    // Windows — Node.js installer default locations
+    path.join(HOME, 'AppData', 'Local', 'Programs', 'nodejs'),
     'C:\\Program Files\\nodejs',
+    'C:\\Program Files (x86)\\nodejs',
+    // Windows — nvm-windows: NVM_HOME env var or default location
+    process.env.NVM_HOME || path.join(HOME, 'AppData', 'Roaming', 'nvm'),
+    // Windows — Scoop package manager
+    path.join(HOME, 'scoop', 'shims'),
+    path.join(HOME, 'scoop', 'apps', 'nodejs', 'current'),
+    // Windows — Chocolatey
+    'C:\\tools\\nodejs',
+    'C:\\ProgramData\\chocolatey\\bin',
+    // Windows — WinGet NodeJS typically ends up via system PATH, but fallback:
+    'C:\\Program Files\\nodejs',
+    // Our portable Node and npm prefix
     path.join(NODE_DIR, 'bin'),
     NODE_DIR,
     path.join(NPM_PREFIX, 'bin'),
     NPM_PREFIX
   ];
   const candidates = [...paths, ...extra];
-  const exts = isWin ? [EXE, CMD, '.bat', ''] : [''];
+  // On Windows, npm installs CLIs as .cmd AND .ps1 wrappers alongside the shell script.
+  const exts = isWin ? [EXE, CMD, '.ps1', '.bat', ''] : [''];
   for (const dir of candidates) {
     if (!dir) continue;
     for (const ext of exts) {
       const full = path.join(dir, cmd + ext);
       try { if (fs.statSync(full).isFile()) return full; } catch {}
     }
-    // nvm-style nested versions/<v>/bin
+    // nvm-style nested versions/<v>/bin (Unix nvm)
     if (dir.endsWith('versions/node') || dir.endsWith('versions\\node')) {
       try {
         for (const v of fs.readdirSync(dir)) {
           for (const ext of exts) {
             const full = path.join(dir, v, isWin ? '' : 'bin', cmd + ext);
+            try { if (fs.statSync(full).isFile()) return full; } catch {}
+          }
+        }
+      } catch {}
+    }
+    // nvm-windows: Roaming\nvm\v<version> (each version dir is the bin dir)
+    if (isWin && (dir === (process.env.NVM_HOME || path.join(HOME, 'AppData', 'Roaming', 'nvm')))) {
+      try {
+        for (const v of fs.readdirSync(dir)) {
+          if (!v.startsWith('v')) continue;
+          for (const ext of exts) {
+            const full = path.join(dir, v, cmd + ext);
             try { if (fs.statSync(full).isFile()) return full; } catch {}
           }
         }
@@ -193,11 +222,44 @@ function ensureNode() {
 
 // ---- Anthropic CLI ----
 
-function detectClaude() {
+// Query npm's actual configured global prefix (may differ from our NPM_PREFIX).
+function getNpmGlobalBinDir(npmBin) {
+  if (!npmBin) return null;
+  try {
+    const r = spawnSync(npmBin, ['config', 'get', 'prefix'],
+      { encoding: 'utf8', stdio: 'pipe', timeout: 6000, shell: isWin });
+    const prefix = (r.stdout || '').trim();
+    if (r.status === 0 && prefix && prefix !== 'undefined') {
+      return isWin ? prefix : path.join(prefix, 'bin');
+    }
+  } catch {}
+  return null;
+}
+
+function detectClaude(npmBin) {
+  // 1. Check every directory in PATH + well-known locations (includes .cmd / .ps1 on Windows).
   const direct = which('claude');
   if (direct) return direct;
-  const local = path.join(NPM_PREFIX, isWin ? 'claude.cmd' : 'bin/claude');
-  if (fs.existsSync(local)) return local;
+
+  // 2. Our own per-user npm prefix.
+  const winExts = ['.cmd', '.ps1', '.bat', ''];
+  for (const ext of isWin ? winExts : ['']) {
+    const local = path.join(NPM_PREFIX, isWin ? ('claude' + ext) : 'bin/claude');
+    if (fs.existsSync(local)) return local;
+  }
+
+  // 3. Dynamically ask npm where it actually installs global binaries.
+  //    This catches non-default prefixes set via `npm config set prefix`.
+  if (npmBin || (npmBin = which('npm'))) {
+    const binDir = getNpmGlobalBinDir(npmBin);
+    if (binDir) {
+      for (const ext of isWin ? winExts : ['']) {
+        const f = path.join(binDir, 'claude' + ext);
+        try { if (fs.statSync(f).isFile()) return f; } catch {}
+      }
+    }
+  }
+
   return null;
 }
 
@@ -349,7 +411,7 @@ function persistPath() {
 }
 
 async function ensureClaude(npmBin) {
-  const found = detectClaude();
+  const found = detectClaude(npmBin);
   if (found) return found;
   log('Installing @anthropic-ai/claude-code…');
 
@@ -359,28 +421,28 @@ async function ensureClaude(npmBin) {
   // Attempt 1: global install as admin (when available).
   if (isAdmin()) {
     if (run(npmBin, ['install', '-g', '@anthropic-ai/claude-code', ...proxyArgs])) {
-      const c = detectClaude(); if (c) return c;
+      const c = detectClaude(npmBin); if (c) return c;
     }
   }
 
   // Attempt 2: per-user prefix (no admin needed).
   log('Falling back to per-user install at ' + NPM_PREFIX);
   if (run(npmBin, ['install', '-g', '@anthropic-ai/claude-code', ...proxyArgs], { env: perUserEnv })) {
-    const c = detectClaude(); if (c) return c;
+    const c = detectClaude(npmBin); if (c) return c;
   }
 
   // Attempt 3: same but with --strict-ssl=false for corporate SSL-inspection proxies.
   if (!proxyArgs.includes('--strict-ssl=false')) {
     warn('Retrying with --strict-ssl=false (corporate SSL-inspection proxy workaround)…');
     if (run(npmBin, ['install', '-g', '@anthropic-ai/claude-code', ...proxyArgs, '--strict-ssl=false'], { env: perUserEnv })) {
-      const c = detectClaude(); if (c) return c;
+      const c = detectClaude(npmBin); if (c) return c;
     }
   }
 
   // Attempt 4: legacy peer deps in case of dependency conflicts.
   warn('Retrying with --legacy-peer-deps…');
   if (run(npmBin, ['install', '-g', '@anthropic-ai/claude-code', ...proxyArgs, '--legacy-peer-deps'], { env: perUserEnv })) {
-    const c = detectClaude(); if (c) return c;
+    const c = detectClaude(npmBin); if (c) return c;
   }
 
   throw new Error('Failed to install @anthropic-ai/claude-code via npm. Check network/proxy settings and try: node src/install.js --doctor');
@@ -395,7 +457,11 @@ function doctor() {
   console.log('node     :', process.execPath, '(running)');
   const npm = which('npm');
   console.log('npm      :', npm || '(not found)');
-  const claude = detectClaude();
+  if (isWin && npm) {
+    const binDir = getNpmGlobalBinDir(npm);
+    console.log('npm global bin:', binDir || '(could not detect)');
+  }
+  const claude = detectClaude(npm);
   console.log('claude   :', claude || '(not found)');
   const python = detectPython();
   console.log('python   :', python || '(not found — Claude Code hooks need python3.10+)');
@@ -437,4 +503,4 @@ if (require.main === module) {
   main().catch(err => { warn(err.stack || err.message); process.exit(1); });
 }
 
-module.exports = { detectNode, detectClaude, detectPython, ensurePython, symlinkPythonForHooks, ensureNode, ensureClaude, getNpmProxyArgs, persistPath, which, doctor, ROOT, NPM_PREFIX, NODE_DIR };
+module.exports = { detectNode, detectClaude, detectPython, ensurePython, symlinkPythonForHooks, ensureNode, ensureClaude, getNpmProxyArgs, getNpmGlobalBinDir, persistPath, which, doctor, ROOT, NPM_PREFIX, NODE_DIR };
