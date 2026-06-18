@@ -655,38 +655,20 @@ function createAnthropicSSEEmitter(res, model) {
         id: tc.id || newId('toolu'),
         name: tc.function?.name || '',
         argsBuf: '',
-        started: false
       };
       toolBlocks.set(idx, block);
     }
     if (tc.function?.name && !block.name) block.name = tc.function.name;
     if (tc.function?.arguments) {
       const incoming = tc.function.arguments;
-      let chunk = '';
       if (incoming.startsWith(block.argsBuf) && incoming.length > block.argsBuf.length) {
-        // Full accumulated arguments passed, extract the new suffix chunk
-        chunk = incoming.slice(block.argsBuf.length);
         block.argsBuf = incoming;
       } else if (!block.argsBuf.endsWith(incoming)) {
-        // Incremental arguments chunk passed
-        chunk = incoming;
         block.argsBuf += incoming;
       }
-      if (chunk) {
-        if (!block.started) {
-          block.started = true;
-          send('content_block_start', {
-            type: 'content_block_start',
-            index: block.index,
-            content_block: { type: 'tool_use', id: block.id, name: block.name, input: {} }
-          });
-        }
-        send('content_block_delta', {
-          type: 'content_block_delta',
-          index: block.index,
-          delta: { type: 'input_json_delta', partial_json: chunk }
-        });
-      }
+      // Arguments are buffered here — NOT streamed in real-time.
+      // end() validates + repairs the full JSON before forwarding so
+      // truncated/empty args never reach Claude Code as input:{}.
     }
   }
 
@@ -747,20 +729,25 @@ function createAnthropicSSEEmitter(res, model) {
       const simTools = parseSimulatedTools(textBuffer);
       if (simTools.length > 0) {
         for (const st of simTools) {
+          const repArgs = repairJSON(st.arguments);
+          const rawStArgs = (st.arguments || '').trim();
+          // Skip simulated tool calls whose args are irrecoverably empty.
+          if (rawStArgs && rawStArgs !== '{}') {
+            try { if (Object.keys(JSON.parse(repArgs)).length === 0) continue; } catch {}
+          }
           const bIndex = nextBlockIndex++;
           send('content_block_start', {
             type: 'content_block_start',
             index: bIndex,
             content_block: { type: 'tool_use', id: newId('toolu'), name: st.name, input: {} }
           });
-          const repArgs = repairJSON(st.arguments);
           send('content_block_delta', {
             type: 'content_block_delta',
             index: bIndex,
             delta: { type: 'input_json_delta', partial_json: repArgs }
           });
           send('content_block_stop', { type: 'content_block_stop', index: bIndex });
-          toolBlocks.set(bIndex, { index: bIndex }); // Keep track so tool_use is reported
+          toolBlocks.set(bIndex, { index: bIndex, name: st.name, argsBuf: rawStArgs });
         }
       } else {
         // False alarm, flush it as text
@@ -777,43 +764,62 @@ function createAnthropicSSEEmitter(res, model) {
 
     const activeToolBlocks = new Map();
     for (const [idx, block] of toolBlocks.entries()) {
-      if (!block.started && stopReason === 'max_tokens') {
-        continue;
+      // Skip phantom blocks — tool call that arrived without a function name
+      // (model was truncated before emitting even the tool name).
+      if (!block.name) continue;
+      // On max_tokens, skip blocks where the model was cut off before any
+      // argument bytes arrived (nothing recoverable to forward).
+      if (!block.argsBuf && stopReason === 'max_tokens') continue;
+
+      // Validate + repair the fully accumulated argument JSON before emitting.
+      // Because we buffered instead of streaming chunks, these bytes have not
+      // reached Claude Code yet — we can safely skip truncated/empty calls.
+      const rawArgs = (block.argsBuf || '').trim();
+      let finalArgs = rawArgs;
+      if (rawArgs) {
+        let valid = false;
+        try { JSON.parse(rawArgs); valid = true; } catch { /* fall through */ }
+        if (!valid) {
+          let suffix = getJSONRepairSuffix(rawArgs);
+          if (!suffix && rawArgs.startsWith('{')) {
+            const { inString, escape, openBraces, openBrackets } = _jsonDepth(rawArgs);
+            let forced = '';
+            if (escape)        forced += 'n"';
+            else if (inString) forced += '"';
+            for (let i = 0; i < openBrackets; i++) forced += ']';
+            for (let i = 0; i < openBraces;   i++) forced += '}';
+            try { JSON.parse(rawArgs + forced); suffix = forced; } catch {}
+          }
+          finalArgs = rawArgs + suffix;
+        }
+        // Skip tool calls where repair still yields {} — rawArgs was non-empty
+        // (model started the object) but all content was lost to truncation.
+        // Forwarding would cause InputValidationError for required-parameter tools.
+        if (rawArgs !== '{}') {
+          try {
+            if (Object.keys(JSON.parse(finalArgs)).length === 0) {
+              console.warn(`[proxy] [stream-repair] skipping ${block.name} — args truncated beyond recovery (${rawArgs.length} raw chars)`);
+              continue;
+            }
+          } catch { /* invalid JSON — forward as-is, Claude Code will error */ }
+        }
       }
-      if (!block.started) {
-        block.started = true;
-        send('content_block_start', {
-          type: 'content_block_start',
+
+      // Emit the complete, validated tool block in a single burst.
+      send('content_block_start', {
+        type: 'content_block_start',
+        index: block.index,
+        content_block: { type: 'tool_use', id: block.id, name: block.name, input: {} }
+      });
+      if (finalArgs) {
+        send('content_block_delta', {
+          type: 'content_block_delta',
           index: block.index,
-          content_block: { type: 'tool_use', id: block.id, name: block.name, input: {} }
+          delta: { type: 'input_json_delta', partial_json: finalArgs }
         });
       }
-      activeToolBlocks.set(idx, block);
-
-      if (block.argsBuf !== undefined) {
-        let suffix = getJSONRepairSuffix(block.argsBuf);
-        // If normal repair fails (returns '') but we have a partial object that
-        // at least opened with '{', force-close it so Claude Code can parse
-        // whatever partial parameters arrived rather than getting input:{}.
-        if (!suffix && block.argsBuf.trimStart().startsWith('{')) {
-          const { inString, escape, openBraces, openBrackets } = _jsonDepth(block.argsBuf);
-          let forced = '';
-          if (escape)        forced += 'n"';
-          else if (inString) forced += '"';
-          for (let i = 0; i < openBrackets; i++) forced += ']';
-          for (let i = 0; i < openBraces;   i++) forced += '}';
-          // Only use the forced suffix if it actually produces parseable JSON
-          try { JSON.parse(block.argsBuf + forced); suffix = forced; } catch {}
-        }
-        if (suffix) {
-          send('content_block_delta', {
-            type: 'content_block_delta',
-            index: block.index,
-            delta: { type: 'input_json_delta', partial_json: suffix }
-          });
-        }
-      }
       send('content_block_stop', { type: 'content_block_stop', index: block.index });
+      activeToolBlocks.set(idx, block);
     }
     toolBlocks = activeToolBlocks;
     if (toolBlocks.size > 0) stopReason = 'tool_use';
