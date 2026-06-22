@@ -220,5 +220,74 @@ module.exports = {
         { id: 'databricks/dbrx-instruct',           label: 'DBRX Instruct' }
       ]
     }
+  ],
+
+  cloudflare: [
+    { group: 'Kimi — Moonshot AI',
+      models: [
+        { id: '@cf/moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code (262k ctx, coding)' },
+        { id: '@cf/moonshotai/kimi-k2.6',      label: 'Kimi K2.6 (1T param, 262k ctx, vision + tools)' },
+        { id: '@cf/moonshotai/kimi-k2.5',      label: 'Kimi K2.5 (256k ctx)' }
+      ]
+    },
+    { group: 'GLM — Z.ai',
+      models: [
+        { id: '@cf/zai-org/glm-5.2',       label: 'GLM-5.2 (agentic coding, 262k ctx)' },
+        { id: '@cf/zai-org/glm-4.7-flash', label: 'GLM-4.7-Flash (131k ctx, multilingual)' }
+      ]
+    },
+    { group: 'Meta — Llama 4',
+      models: [
+        { id: '@cf/meta/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B (multimodal)' }
+      ]
+    },
+    { group: 'Meta — Llama 3.x',
+      models: [
+        { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B FP8 (fast)' },
+        { id: '@cf/meta/llama-3.1-70b-instruct',          label: 'Llama 3.1 70B Instruct' },
+        { id: '@cf/meta/llama-3.1-8b-instruct-fp8',       label: 'Llama 3.1 8B FP8' },
+        { id: '@cf/meta/llama-3.1-8b-instruct',           label: 'Llama 3.1 8B Instruct' },
+        { id: '@cf/meta/llama-3.2-3b-instruct',           label: 'Llama 3.2 3B Instruct' },
+        { id: '@cf/meta/llama-3.2-1b-instruct',           label: 'Llama 3.2 1B Instruct' }
+      ]
+    },
+    { group: 'Reasoning',
+      models: [
+        { id: '@cf/qwen/qwq-32b',                             label: 'QwQ-32B (reasoning, o1-mini class)' },
+        { id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', label: 'DeepSeek R1 Distill Qwen 32B' }
+      ]
+    },
+    { group: 'Qwen',
+      models: [
+        { id: '@cf/qwen/qwen3-30b-a3b-fp8',          label: 'Qwen3 30B MoE FP8' },
+        { id: '@cf/qwen/qwen2.5-coder-32b-instruct', label: 'Qwen2.5 Coder 32B Instruct' }
+      ]
+    },
+    { group: 'NVIDIA',
+      models: [
+        { id: '@cf/nvidia/nemotron-3-120b-a12b', label: 'Nemotron 3 Super 120B (agentic)' }
+      ]
+    },
+    { group: 'OpenAI OSS',
+      models: [
+        { id: '@cf/openai/gpt-oss-120b', label: 'GPT OSS 120B (reasoning, agentic)' },
+        { id: '@cf/openai/gpt-oss-20b',  label: 'GPT OSS 20B (low latency)' }
+      ]
+    },
+    { group: 'Mistral',
+      models: [
+        { id: '@cf/mistralai/mistral-small-3.1-24b-instruct', label: 'Mistral Small 3.1 24B (128k ctx)' }
+      ]
+    },
+    { group: 'Google',
+      models: [
+        { id: '@cf/google/gemma-4-26b-a4b-it', label: 'Gemma 4 26B' }
+      ]
+    },
+    { group: 'IBM',
+      models: [
+        { id: '@cf/ibm/granite-4.0-h-micro', label: 'Granite 4.0 Micro' }
+      ]
+    }
   ]
 };

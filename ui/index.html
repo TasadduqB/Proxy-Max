@@ -12,7 +12,7 @@
     --text:#111827; --mute:#667085; --dim:#98a2b3;
     --accent:#1877f2; --accent2:#405de6; --accent3:#10b981; --hot:#e1306c;
     --ok:#3ddc97; --warn:#ffb547; --err:#ff6b6b;
-    --bedrock:#ff9900; --azure:#0078d4; --nvidia:#76b900;
+    --bedrock:#ff9900; --azure:#0078d4; --nvidia:#76b900; --cloudflare:#f38020;
     --shadow:0 18px 45px rgba(15,23,42,.10);
     --glass: none;
   }
@@ -141,9 +141,10 @@
   .src:hover::before { opacity:.7; }
   .src.active { border-color: var(--src-accent, var(--accent)); box-shadow: 0 0 0 1px var(--src-accent, var(--accent)) inset; }
   .src.active::before { opacity:1; }
-  .src[data-p="bedrock"] { --src-accent: var(--bedrock); }
-  .src[data-p="azure"]   { --src-accent: var(--azure); }
-  .src[data-p="nvidia"]  { --src-accent: var(--nvidia); }
+  .src[data-p="bedrock"]     { --src-accent: var(--bedrock); }
+  .src[data-p="azure"]       { --src-accent: var(--azure); }
+  .src[data-p="nvidia"]      { --src-accent: var(--nvidia); }
+  .src[data-p="cloudflare"]  { --src-accent: var(--cloudflare); }
   .src .name { font-weight:600; font-size:13.5px; display:flex; align-items:center; gap:7px; }
   .src .name .dot { width:7px; height:7px; border-radius:50%; background:var(--src-accent, var(--accent)); }
   .src .desc { color:var(--mute); font-size:12px; margin-top:5px; line-height:1.45; }
@@ -294,9 +295,10 @@
   .pool-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); }
   .pool-row:last-child { border-bottom:0; }
   .pool-prov { width:22px; height:22px; border-radius:5px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; color:#fff; }
-  .pool-prov.bedrock { background:var(--bedrock); }
-  .pool-prov.azure   { background:var(--azure);   }
-  .pool-prov.nvidia  { background:var(--nvidia);  }
+  .pool-prov.bedrock     { background:var(--bedrock); }
+  .pool-prov.azure       { background:var(--azure);   }
+  .pool-prov.nvidia      { background:var(--nvidia);  }
+  .pool-prov.cloudflare  { background:var(--cloudflare); }
   .pool-info { flex:1; min-width:0; }
   .pool-label { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .pool-model { font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:ui-monospace,Menlo,Consolas,monospace; }
@@ -875,6 +877,10 @@
             <div class="name"><span class="dot"></span>NVIDIA NIM</div>
             <div class="desc">build.nvidia.com — DeepSeek, Nemotron, Kimi, Qwen, GLM…</div>
           </div>
+          <div class="src" data-p="cloudflare">
+            <div class="name"><span class="dot"></span>Cloudflare Workers AI</div>
+            <div class="desc">Kimi K2, GLM-5.2, Llama 4, QwQ, DeepSeek R1, Mistral, Gemma…</div>
+          </div>
         </div>
       </div>
 
@@ -930,6 +936,14 @@
           </div>
           <label>Session token <span class="small">(optional — STS / SSO)</span></label>
           <input id="br_token" type="password" placeholder="" />
+        </div>
+
+        <div id="cloudflareFields" class="hide">
+          <div class="grid2">
+            <div><label>Account ID</label><input id="cf_accountId" placeholder="597da16ae229e4ec55b2eb7c8efeab6a" /></div>
+            <div><label>API Token</label><input id="cf_apiKey" type="password" placeholder="cfut_..." /></div>
+          </div>
+          <div class="small" style="margin-top:6px">Create a token at <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">dash.cloudflare.com</a> with <strong>Workers AI:Run</strong> permission. Any <code>@cf/vendor/model</code> ID works — paste it in the custom field below.</div>
         </div>
 
         <div class="actions">
@@ -1020,6 +1034,7 @@
           <div>
             <label>Provider</label>
             <select id="poolProvider" onchange="poolProviderChanged()">
+              <option value="cloudflare">Cloudflare Workers AI</option>
               <option value="nvidia">NVIDIA NIM</option>
               <option value="azure">Azure AI Foundry</option>
               <option value="bedrock">AWS Bedrock</option>
@@ -2184,11 +2199,12 @@ function selectProvider(p) {
   state.provider = p;
   for (const el of document.querySelectorAll('.src')) el.classList.toggle('active', el.dataset.p === p);
   $('#formCard').classList.remove('hide');
-  $('#srcBadge').textContent = ({bedrock:'AWS Bedrock', azure:'Azure AI Foundry', nvidia:'NVIDIA NIM'})[p];
-  $('#provBadge').textContent = ({bedrock:'aws', azure:'azure', nvidia:'nvidia'})[p];
+  $('#srcBadge').textContent = ({bedrock:'AWS Bedrock', azure:'Azure AI Foundry', nvidia:'NVIDIA NIM', cloudflare:'Cloudflare Workers AI'})[p] || p;
+  $('#provBadge').textContent = ({bedrock:'aws', azure:'azure', nvidia:'nvidia', cloudflare:'cloudflare'})[p] || p;
   $('#azureFields').classList.toggle('hide', p!=='azure');
   $('#nvidiaFields').classList.toggle('hide', p!=='nvidia');
   $('#bedrockFields').classList.toggle('hide', p!=='bedrock');
+  $('#cloudflareFields').classList.toggle('hide', p!=='cloudflare');
   fillModelSelect(p);
   const saved = (state.config.providers || {})[p] || {};
   if (saved.model) {
@@ -2203,6 +2219,8 @@ function selectProvider(p) {
   } else if (p === 'bedrock') {
     $('#br_region').value = saved.region || 'us-east-1'; $('#br_endpoint').value = saved.endpoint || '';
     $('#br_access').value = saved.accessKeyId || ''; $('#br_secret').value = saved.secretAccessKey || ''; $('#br_token').value = saved.sessionToken || '';
+  } else if (p === 'cloudflare') {
+    $('#cf_accountId').value = saved.accountId || ''; $('#cf_apiKey').value = saved.apiKey || '';
   }
   renderLaunchCard();
 }
@@ -2217,6 +2235,7 @@ function gatherConfig() {
     return { model: model || buildModel || '', endpoint: buildModel ? 'https://integrate.api.nvidia.com/v1' : (rawEndpoint || 'https://integrate.api.nvidia.com/v1'), apiKey: $('#nv_apiKey').value };
   }
   if (p === 'bedrock') return { model, region: $('#br_region').value.trim() || 'us-east-1', endpoint: $('#br_endpoint').value.trim(), accessKeyId: $('#br_access').value.trim(), secretAccessKey: $('#br_secret').value, sessionToken: $('#br_token').value };
+  if (p === 'cloudflare') return { model, accountId: $('#cf_accountId').value.trim(), apiKey: $('#cf_apiKey').value };
 }
 async function save() {
   const cfg = gatherConfig();
@@ -2332,7 +2351,7 @@ function renderPool(data) {
   const rrEl = $('#poolRRPill'); if (rrEl) rrEl.textContent = `rr: ${data.rrIndex ?? 0}`;
   const list = $('#poolList'); if (!list) return;
   if (pool.length === 0) { list.innerHTML = '<div class="small" style="color:var(--dim);padding:10px 0">No models in pool yet — add one below.</div>'; return; }
-  const provAbbr = { nvidia:'N', azure:'A', bedrock:'B' };
+  const provAbbr = { nvidia:'N', azure:'A', bedrock:'B', cloudflare:'CF' };
   list.innerHTML = pool.map((e, i) => {
     const s = e.stats || { req:0, err:0, lastMs:0, cooldownSecsLeft:0 };
     const cooled = (s.cooldownSecsLeft || 0) > 0;
@@ -2350,7 +2369,7 @@ function poolProviderChanged() {
   const saved = (state.config.providers || {})[p] || {};
   const hasKey = !!(saved.apiKey || saved.accessKeyId);
   const statusEl = $('#poolCredStatus'); if (!statusEl) return;
-  const provNames = { nvidia: 'NVIDIA NIM', azure: 'Azure AI Foundry', bedrock: 'AWS Bedrock' };
+  const provNames = { nvidia: 'NVIDIA NIM', azure: 'Azure AI Foundry', bedrock: 'AWS Bedrock', cloudflare: 'Cloudflare Workers AI' };
   const rows = [];
   if (p === 'nvidia') {
     rows.push(['API Key', saved.apiKey ? '••••' + saved.apiKey.slice(-4) : '<span class="err">not set</span>']);
@@ -2364,6 +2383,9 @@ function poolProviderChanged() {
     rows.push(['Region', saved.region || '<span class="err">not set</span>']);
     rows.push(['Access Key', saved.accessKeyId ? '••••' + saved.accessKeyId.slice(-4) : '<span class="err">not set</span>']);
     rows.push(['Secret Key', saved.secretAccessKey ? '••••••••' : '<span class="err">not set</span>']);
+  } else if (p === 'cloudflare') {
+    rows.push(['Account ID', saved.accountId ? escapeHtml(saved.accountId) : '<span class="err">not set</span>']);
+    rows.push(['API Token', saved.apiKey ? '••••' + saved.apiKey.slice(-4) : '<span class="err">not set</span>']);
   }
   const icon = hasKey ? `<span class="ok">${SVG.check}</span>` : `<span class="err">${SVG.x}</span>`;
   const status = hasKey

@@ -1171,6 +1171,16 @@ function buildRequest(cfg) {
     };
   }
 
+  // Cloudflare Workers AI: OpenAI-compatible /ai/v1/chat/completions
+  if (cfg.kind === 'cloudflare') {
+    const accountId = (cfg.accountId || '').trim();
+    return {
+      url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`,
+      headers: { Authorization: `Bearer ${cfg.apiKey}` },
+      isResponsesApi: false
+    };
+  }
+
   // NVIDIA NIM (build.nvidia.com): https://integrate.api.nvidia.com/v1
   const base = (cfg.endpoint || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
   return {

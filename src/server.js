@@ -54,7 +54,10 @@ function inferModelProfile(model = '', provider = '') {
   if (/1m|1000k|long|opus|fable|mythos|sonnet-4-6|gpt-5/.test(m)) tags.add('long-context');
   if (/vision|vl|image|4o|opus|sonnet|fable/.test(m)) tags.add('vision');
   if (/embed|embedding/.test(m)) { category = 'embedding'; priority = 5; summary = 'Embeddings only; not suitable for Claude Code chat'; tags.add('embedding'); }
-  if (/azure|openai|nvidia|bedrock/.test(p)) tags.add(p.replace(/[^a-z0-9-]/g, ''));
+  if (/azure|openai|nvidia|bedrock|cloudflare/.test(p)) tags.add(p.replace(/[^a-z0-9-]/g, ''));
+  if (/kimi|glm|qwq|deepseek-r|nemotron/.test(m)) { category = 'reasoning'; priority = 80; summary = 'Hard reasoning and coding'; ['reasoning','coding','analysis'].forEach(t=>tags.add(t)); }
+  if (/262k|256k|131k|128k|long/.test(m)) tags.add('long-context');
+  if (/vision|scout|kimi-k2\.[67]|mistral-small/.test(m)) tags.add('vision');
   return { category, tags: [...tags], priority, summary };
 }
 
@@ -2263,10 +2266,10 @@ function handleV1Models(_req, res) {
   // Include max_input_tokens, max_tokens, capabilities so the SDK can use them.
   const provider = CONFIG.provider;
   // Determine capabilities based on active provider.
-  const supportsComputerUse   = provider === 'bedrock'; // Only Bedrock supports computer-use
-  const supportsThinking      = provider !== 'nvidia';  // NIM doesn't support extended thinking
-  const supportsPromptCaching = provider !== 'nvidia';  // NIM doesn't support prompt caching
-  const supportsVision        = provider !== 'nvidia';  // NIM has limited vision support
+  const supportsComputerUse   = provider === 'bedrock';
+  const supportsThinking      = provider !== 'nvidia';
+  const supportsPromptCaching = provider !== 'nvidia' && provider !== 'cloudflare';
+  const supportsVision        = provider !== 'nvidia';
 
   const data = [
     { type: 'model', id: 'claude-fable-5',            display_name: 'Claude Fable 5',     created_at: '2026-06-01T00:00:00Z', max_input_tokens: 1000000, max_tokens: 128000, capabilities: { vision: supportsVision, tool_use: true, extended_thinking: supportsThinking, computer_use: supportsComputerUse, prompt_caching: supportsPromptCaching } },
