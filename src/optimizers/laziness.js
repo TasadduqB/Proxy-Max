@@ -88,6 +88,8 @@ const MODES = {
   ultra: LAZINESS_ULTRA,
 };
 
+const MARKER = '[LAZINESS';
+
 class LazinessOptimizer {
   /**
    * Inject laziness rules into the body's system prompt.
@@ -100,11 +102,17 @@ class LazinessOptimizer {
     const rules = MODES[mode];
     if (!rules) return { body, injected: false, mode };
 
-    // Append to existing system prompt
+    // Append to existing system prompt. Guard against double-injection (idempotent)
+    // so the ruleset can't accumulate if the system prompt is ever re-submitted.
     if (typeof body.system === 'string') {
+      if (body.system.includes(MARKER)) return { body, injected: false, mode };
       body.system = body.system + '\n\n' + rules;
     } else if (Array.isArray(body.system)) {
       // Array-form system prompt (Anthropic format)
+      const alreadyPresent = body.system.some(
+        block => block && block.type === 'text' && typeof block.text === 'string' && block.text.includes(MARKER)
+      );
+      if (alreadyPresent) return { body, injected: false, mode };
       body.system = [...body.system, { type: 'text', text: '\n\n' + rules }];
     } else {
       body.system = rules;
