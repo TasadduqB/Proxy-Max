@@ -605,7 +605,10 @@ async function callWithWebSearchLoop(providerCfg, sanitizedBody, originalBody, r
   for (let loop = 0; loop < MAX_SEARCH_LOOPS; loop++) {
     const payload = buildPayload(currentBody, modelForUpstream(cfg), cfg, isResponsesApi);
     // All internal calls are non-streaming so we can inspect results before forwarding.
+    // Drop stream_options: it's only valid with stream:true and providers (Azure/
+    // OpenAI) 400 if it's present on a non-streaming request.
     const payloadNonStream = { ...payload, stream: false };
+    delete payloadNonStream.stream_options;
 
     const controller = new AbortController();
     // Non-streaming calls in the web search loop need a generous timeout —

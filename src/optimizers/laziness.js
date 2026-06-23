@@ -90,9 +90,11 @@ const MODES = {
 
 const MARKER = '[LAZINESS';
 
+const { injectIntoSystem } = require('./_inject-system');
+
 class LazinessOptimizer {
   /**
-   * Inject laziness rules into the body's system prompt.
+   * Inject laziness rules into the body's system prompt (idempotent).
    * @param {object} body — Anthropic Messages API request body
    * @param {{ mode?: string }} options
    * @returns {{ body: object, injected: boolean, mode: string }}
@@ -101,24 +103,8 @@ class LazinessOptimizer {
     const mode = (options.mode || 'full').toLowerCase();
     const rules = MODES[mode];
     if (!rules) return { body, injected: false, mode };
-
-    // Append to existing system prompt. Guard against double-injection (idempotent)
-    // so the ruleset can't accumulate if the system prompt is ever re-submitted.
-    if (typeof body.system === 'string') {
-      if (body.system.includes(MARKER)) return { body, injected: false, mode };
-      body.system = body.system + '\n\n' + rules;
-    } else if (Array.isArray(body.system)) {
-      // Array-form system prompt (Anthropic format)
-      const alreadyPresent = body.system.some(
-        block => block && block.type === 'text' && typeof block.text === 'string' && block.text.includes(MARKER)
-      );
-      if (alreadyPresent) return { body, injected: false, mode };
-      body.system = [...body.system, { type: 'text', text: '\n\n' + rules }];
-    } else {
-      body.system = rules;
-    }
-
-    return { body, injected: true, mode };
+    const injected = injectIntoSystem(body, rules, MARKER);
+    return { body, injected, mode };
   }
 }
 

@@ -41,10 +41,12 @@ const MODES = {
 
 const MARKER = '[RESPONSE STYLE';
 
+const { injectIntoSystem } = require('./_inject-system');
+
 class ResponseStyleOptimizer {
   /**
-   * Inject response-style rules into the body's system prompt.
-   * Skips injection if the marker is already present.
+   * Inject response-style rules into the body's system prompt (idempotent —
+   * skips if the marker is already present).
    * @param {object} body — Anthropic Messages API request body
    * @param {{ mode?: string }} options
    * @returns {{ body: object, injected: boolean, mode: string }}
@@ -53,23 +55,8 @@ class ResponseStyleOptimizer {
     const mode = (options.mode || 'full').toLowerCase();
     const rules = MODES[mode];
     if (!rules) return { body, injected: false, mode };
-
-    // Guard: skip if already injected (idempotent)
-    if (typeof body.system === 'string') {
-      if (body.system.includes(MARKER)) return { body, injected: false, mode };
-      body.system = body.system + '\n\n' + rules;
-    } else if (Array.isArray(body.system)) {
-      // Check all text blocks for an existing marker
-      const alreadyPresent = body.system.some(
-        block => block && block.type === 'text' && typeof block.text === 'string' && block.text.includes(MARKER)
-      );
-      if (alreadyPresent) return { body, injected: false, mode };
-      body.system = [...body.system, { type: 'text', text: '\n\n' + rules }];
-    } else {
-      body.system = rules;
-    }
-
-    return { body, injected: true, mode };
+    const injected = injectIntoSystem(body, rules, MARKER);
+    return { body, injected, mode };
   }
 }
 

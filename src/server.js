@@ -116,11 +116,12 @@ try {
 
 function estimateRequestTokens(body, provider = 'anthropic') {
   try {
-    // Sum tokens over the textual leaves of the request rather than
-    // JSON.stringify-ing the whole body. Avoids allocating a multi-MB string for
-    // large conversations and stops counting JSON punctuation/escaping (which
-    // previously inflated the estimate). Small leaves (tool input / schema) are
-    // stringified individually.
+    // Sum tokens over the leaves of the request rather than JSON.stringify-ing the
+    // whole body (which allocated a multi-MB string for large conversations and
+    // counted the outer JSON punctuation/escaping the model never sees). Prose
+    // (system text, message text, tool_result content) is counted as text; tool
+    // input_schema and tool_use input are counted as serialized JSON on purpose —
+    // the model receives those as JSON, so their braces/keys are real tokens.
     let inputTokens = 0;
     const add = (s) => {
       if (s == null || s === '') return;
@@ -138,6 +139,7 @@ function estimateRequestTokens(body, provider = 'anthropic') {
           if (blk?.text != null) add(blk.text);
           else if (blk?.content != null) add(blk.content);   // tool_result content
           else if (blk?.input != null) add(blk.input);       // tool_use args
+          else if (blk?.source?.data != null) add(blk.source.data); // image base64
         }
       }
     }
@@ -1028,8 +1030,12 @@ async function handleMessages(req, res) {
   // provider (handled later in sanitizeBodyForProvider for Bedrock).
   const optApplied = [];     // human-readable list of stages that fired
   let optEstTokensSaved = 0; // rough estimate (~4 chars / token)
-  let messagesMutated = false; // set when a stage rewrites body.messages — the
-                               // final transcript re-validation is only needed then.
+  let messagesMutated = false; // set by EVERY stage that changes message content or
+                               // structure (reassigns body.messages OR edits a block
+                               // in place). The final transcript re-validation only
+                               // runs when this is true; any new message-mutating
+                               // stage MUST set it or the orphan-transcript guard is
+                               // silently skipped.
   OPT_STATS.requests++;
   if (claudeCodeFastPath) OPT_STATS.claudeCodeFastPathRequests++;
 
@@ -1140,6 +1146,7 @@ async function handleMessages(req, res) {
     }
     body._compressionMode = compMode;
     if (proseSaved > 0) {
+      messagesMutated = true;
       OPT_STATS.proseCharsSaved += proseSaved;
       optEstTokensSaved += proseSaved / 4;
       optApplied.push(`prose:${compMode}(-${proseSaved}c)`);
@@ -1179,6 +1186,7 @@ async function handleMessages(req, res) {
               '</tool_use_error>',
               '\n\nCRITICAL SYSTEM WARNING: You hit the maximum output token limit because the file is too large! DO NOT attempt to use the Write tool again for this file. You MUST use the Edit tool or bash commands to modify this file incrementally.</tool_use_error>'
             );
+            messagesMutated = true;
           }
         }
       }
